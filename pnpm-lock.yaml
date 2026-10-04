@@ -82,6 +82,9 @@ importers:
       '@reduxjs/toolkit':
         specifier: ^2.3.0
         version: 2.13.0(react-redux@9.3.0(@types/react@18.3.31)(react@18.3.1)(redux@5.0.1))(react@18.3.1)
+      '@worksheet-clone/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       react:
         specifier: ^18.3.0
         version: 18.3.1
