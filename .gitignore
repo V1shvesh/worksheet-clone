@@ -3,6 +3,7 @@ dist/
 build/
 .turbo/
 coverage/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
