@@ -132,9 +132,9 @@ Never bypass hooks with `--no-verify`. A change is done only when the relevant t
 ## Current status
 
 - [x] Stack and architecture decided (see `PROJECT_CONTEXT.md`)
-- [ ] M0 — Walking skeleton (repo, tooling, CI, Docker, deployed hello-world) ← **next**
-- [ ] M1 — Auth
-- [ ] M2 — Workbooks + ACL
+- [~] M0 — Walking skeleton (repo, tooling, CI, Docker, deployed hello-world) — built and verified locally; not yet deployed (see status narrative)
+- [x] M1 — Auth
+- [ ] M2 — Workbooks + ACL ← **next**
 - [ ] M3 — Realtime document backbone
 - [ ] M4a — Grid port + view model + formula engine (no AG Grid)
 - [ ] M4b — AG Grid Community adapter + selection/keyboard/editor
