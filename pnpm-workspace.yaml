@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  argon2: true
   esbuild: true
 # Required for `pnpm deploy` (docker/Dockerfile's deploy stage) to bundle
 # workspace dependencies as real copies instead of symlinks.
