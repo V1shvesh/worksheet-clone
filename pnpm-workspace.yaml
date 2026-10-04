@@ -3,7 +3,12 @@ packages:
   - "packages/*"
 allowBuilds:
   argon2: true
+  # testcontainers' optional SSH-tunnel-to-remote-docker support; unused
+  # since we only talk to the local Docker daemon.
+  cpu-features: false
   esbuild: true
+  protobufjs: false
+  ssh2: false
 # Required for `pnpm deploy` (docker/Dockerfile's deploy stage) to bundle
 # workspace dependencies as real copies instead of symlinks.
 injectWorkspacePackages: true
