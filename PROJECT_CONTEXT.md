@@ -12,19 +12,20 @@ Hand both files to the assistant at the start of every new session.
 ## 2. Key decisions and trade-offs
 
 ### 2.1 CRDT: Yjs (decided)
-Mature, fast binary encoding, `Y.UndoManager` gives per-user undo/redo out of the box (only undoes *your* changes, not collaborators'), awareness protocol for presence, and ready-made server (Hocuspocus). Automerge has a friendlier JSON model and full history, but heavier payloads and DIY undo.
+
+Mature, fast binary encoding, `Y.UndoManager` gives per-user undo/redo out of the box (only undoes _your_ changes, not collaborators'), awareness protocol for presence, and ready-made server (Hocuspocus). Automerge has a friendlier JSON model and full history, but heavier payloads and DIY undo.
 
 ### 2.2 Backend framework: Fastify + Hocuspocus
 
-| Axis | Fastify + Hocuspocus | NestJS | Express |
-|---|---|---|---|
-| Boilerplate for a solo project | Low | High (modules, DI, decorators) | Low, but you assemble everything |
-| TypeScript experience | Very good; schema-typed routes (zod type provider) | Very good | Weakest; types bolted on |
-| Realtime/Yjs story | Hocuspocus is purpose-built: auth hook, persistence extension, debounced saves, read-only connections | Must wrap Hocuspocus or y-websocket in a gateway anyway | Same — wire it yourself |
-| Testability | `fastify.inject()` tests routes without a network | Good testing module, more setup | supertest, fine |
-| Performance | Fastest of the three | Runs on Express or Fastify underneath | Slowest |
-| Structure at scale | You enforce it (we do: `domain/` is framework-free) | Enforced by the framework | You enforce it |
-| Learning value | Learn the moving parts | Learn an opinionated framework | Familiar already |
+| Axis                           | Fastify + Hocuspocus                                                                                  | NestJS                                                  | Express                          |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------- |
+| Boilerplate for a solo project | Low                                                                                                   | High (modules, DI, decorators)                          | Low, but you assemble everything |
+| TypeScript experience          | Very good; schema-typed routes (zod type provider)                                                    | Very good                                               | Weakest; types bolted on         |
+| Realtime/Yjs story             | Hocuspocus is purpose-built: auth hook, persistence extension, debounced saves, read-only connections | Must wrap Hocuspocus or y-websocket in a gateway anyway | Same — wire it yourself          |
+| Testability                    | `fastify.inject()` tests routes without a network                                                     | Good testing module, more setup                         | supertest, fine                  |
+| Performance                    | Fastest of the three                                                                                  | Runs on Express or Fastify underneath                   | Slowest                          |
+| Structure at scale             | You enforce it (we do: `domain/` is framework-free)                                                   | Enforced by the framework                               | You enforce it                   |
+| Learning value                 | Learn the moving parts                                                                                | Learn an opinionated framework                          | Familiar already                 |
 
 **Decision:** Fastify + Hocuspocus. The hard part of this project is realtime, and Hocuspocus solves exactly that part; NestJS's structure mainly pays off on larger teams. If structure becomes a pain, the `domain/` layer keeps a later migration cheap.
 
@@ -32,18 +33,19 @@ Mature, fast binary encoding, `Y.UndoManager` gives per-user undo/redo out of th
 
 Data is relational (users → workbooks → members/roles), and Yjs state is just bytes (`bytea`). Postgres covers both.
 
-| Axis | Postgres + Drizzle | Postgres + Prisma | SQLite |
-|---|---|---|---|
-| Fit for users/workbooks/ACL | Excellent | Excellent | Good |
-| Runtime weight / cold start | Light, no engine binary — matters when the container wakes from sleep | Heavier client; codegen step in builds | Lightest |
-| Type safety | Schema in TS, SQL-like queries | Generated client, great DX | Via Drizzle too |
-| Learning curve | Need to think in SQL (a plus for learning) | Gentlest | Gentle |
-| Cloud deployment | Any managed Postgres | Any managed Postgres | Needs a persistent volume; single instance only; backups on you |
-| Pause / idle cost | With Neon: compute scales to zero, you pay only storage | Same | Volume billed continuously |
+| Axis                        | Postgres + Drizzle                                                    | Postgres + Prisma                      | SQLite                                                          |
+| --------------------------- | --------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------- |
+| Fit for users/workbooks/ACL | Excellent                                                             | Excellent                              | Good                                                            |
+| Runtime weight / cold start | Light, no engine binary — matters when the container wakes from sleep | Heavier client; codegen step in builds | Lightest                                                        |
+| Type safety                 | Schema in TS, SQL-like queries                                        | Generated client, great DX             | Via Drizzle too                                                 |
+| Learning curve              | Need to think in SQL (a plus for learning)                            | Gentlest                               | Gentle                                                          |
+| Cloud deployment            | Any managed Postgres                                                  | Any managed Postgres                   | Needs a persistent volume; single instance only; backups on you |
+| Pause / idle cost           | With Neon: compute scales to zero, you pay only storage               | Same                                   | Volume billed continuously                                      |
 
 **Decision:** Postgres + Drizzle. Prisma is a fine alternative if DX matters more than cold-start weight.
 
 **Where Postgres runs:** Neon (free tier) rather than a Railway Postgres service, because:
+
 - Neon compute suspends after 5 min idle and wakes in a few hundred ms → idle DB cost ≈ $0 on the free tier.
 - A Railway Postgres container would be billed for RAM continuously, and a long-lived DB connection between Railway services keeps the app from sleeping.
 - Neon branching gives free throwaway databases for preview deploys.
@@ -60,23 +62,28 @@ Local dev and CI use a plain `postgres` Docker container (compose / Testcontaine
 - Trade-off accepted: first request after sleep pays a cold start (container + Neon wake). A "waking up…" state in the UI hides it.
 
 ### 2.5 Formula engine: HyperFormula
+
 Runs **client-side** on each user's machine, fed from the Y.Doc. The CRDT stores only inputs; every client deterministically recomputes the same results. This answers "one edit affects many dependent cells": only the edited cell syncs, dependents recompute locally — no fan-out of writes, no conflicts on derived values.
+
 - **License note:** HyperFormula is GPLv3 or commercial. Using `licenseKey: 'gpl-v3'` means the project should be GPLv3-compatible if distributed. Fine for an open-source personal project — decide the repo license with this in mind.
 - Optional later: a server-side HyperFormula instance for validation or exports.
 
 ### 2.6 Grid: AG Grid Community behind a port (see `docs/adr/0001-grid-abstraction.md`)
+
 - Range selection, fill handle and clipboard ranges are AG Grid Enterprise features ($999/dev). Alternatives considered: AG Grid Enterprise, Glide Data Grid, RevoGrid, Handsontable.
 - **Decision:** AG Grid Community, used only to paint virtualized cells/headers and capture gestures. We build selection, keyboard, fill handle, clipboard, editor and menus ourselves in grid-agnostic TypeScript, talking to the grid through one `GridView` interface.
-- **Why this avoids lock-in:** the spreadsheet *behavior* is ours, so it survives a grid swap. Swapping = one new adapter that passes the port contract test suite. ESLint stops `ag-grid-*` imports leaking outside the adapter; e2e tests use our own `data-*` attributes, not AG Grid's DOM.
+- **Why this avoids lock-in:** the spreadsheet _behavior_ is ours, so it survives a grid swap. Swapping = one new adapter that passes the port contract test suite. ESLint stops `ag-grid-*` imports leaking outside the adapter; e2e tests use our own `data-*` attributes, not AG Grid's DOM.
 - **Cost accepted:** more code in M4/M6, and overlays (selection rectangles, fill handle, floating editor) must stay aligned with the grid while scrolling. That alignment is the main risk to watch; the fallback is a new adapter (Enterprise or another grid) without touching anything above the port.
 
 ### 2.7 State management split
+
 - **Yjs** = shared document (cells, formats, sheet list, row/col order, workbook name).
 - **Redux Toolkit** = local UI state (selection, active sheet id, edit mode, formula-bar draft, dialogs, connection/sync status, errors). Selection is stored as row/col **ids** (so it survives a collaborator inserting rows) and converted to visual indices for the grid port.
 - **RTK Query** = REST data (session, workbook list, members).
 - Components read doc data through small hooks (`useCell(sheetId, rowId, colId)`) built on `useSyncExternalStore` over Yjs observers, so the grid re-renders only changed cells.
 
 ### 2.8 Auth
+
 Self-built email/password with argon2id and server-side sessions in Postgres (httpOnly, Secure, SameSite=Lax cookie). Small surface, no third-party dependency, good learning. The WebSocket handshake carries the same cookie; Hocuspocus `onAuthenticate` resolves the session and the user's role on that workbook.
 Alternative if this becomes a chore: Neon Auth / an OAuth provider later.
 
@@ -119,6 +126,7 @@ doc.getMap('sheets')        → sheetId → Y.Map {
 **Yjs has no native move:** reorder = delete + insert in one transaction. Concurrent moves of the same row can duplicate the id; the client de-duplicates when reading `rowOrder` (first occurrence wins, deterministically on all clients).
 
 ### 3.2 Edit lifecycle (requirement 6)
+
 1. User action (type in a cell, paste a range, delete a column) → one `doc.transact(..., LOCAL_ORIGIN)`.
 2. Yjs applies locally (optimistic); the observer updates HyperFormula → dependent cells re-render.
 3. The provider sends one update message per transaction → the action is atomic on the wire.
@@ -126,7 +134,9 @@ doc.getMap('sheets')        → sheetId → Y.Map {
 5. `Y.UndoManager` (trackedOrigins = LOCAL_ORIGIN, captureTimeout ≈ 500 ms) groups the same transaction for undo/redo.
 
 ### 3.3 Rollback & error handling strategy
+
 CRDT updates cannot be "rejected" after the fact without forking state, so we prevent bad writes and recover cleanly:
+
 - **Prevent:** viewers get `connection.readOnly = true` (server drops their updates); the UI disables editing for viewers. Client-side validation before transact (formula parse errors become a cell value, not a failed write).
 - **User rollback:** undo/redo via UndoManager — inverse operations, so it is collaboration-safe.
 - **Server rejection** (access revoked, doc too large, schema violation detected in `onChange`): server closes the connection with a typed close code → client shows a banner, stops editing, discards the local doc and reloads the authoritative state (pending local changes are exported to a recovery copy, not silently lost).
@@ -135,22 +145,24 @@ CRDT updates cannot be "rejected" after the fact without forking state, so we pr
 - **Formula engine errors:** never crash the grid; show `#ERROR!`-style values and log.
 
 ### 3.4 Concurrency (requirement 7)
+
 Conflict resolution comes from Yjs: last-writer-wins per cell key (deterministic across clients), structural ops merge as described above. Presence (who is in which cell) via awareness in M8. **Version history** (snapshots from the stored update log, restore points) is future scope; the persistence layer stores periodic snapshots from the start so it can be added without migration pain.
 
 ### 3.5 ACL (minimal)
+
 `workbook_members(workbook_id, user_id, role: 'owner'|'editor'|'viewer')`. Owner: delete workbook, manage members, rename. Editor: edit content, sheets. Viewer: read-only. Enforced in `domain/acl.ts`, used by both REST handlers and Hocuspocus `onAuthenticate`. Members are added by email of an existing account (no email invites in v1).
 
 ## 4. Testing strategy
 
-| Layer | Tool | What |
-|---|---|---|
-| shared | Vitest | formula id-ref codec, doc accessors, zod schemas — property tests for codec round-trips |
-| server functional | Vitest + `fastify.inject` + Testcontainers Postgres | routes, ACL matrix, session handling, migrations |
-| server e2e | Vitest + real server on a random port + Testcontainers + two `HocuspocusProvider` clients in Node | signup → create workbook → two users edit → convergence; viewer writes dropped; revoked access closes socket; persistence survives restart |
-| web functional | Vitest + Testing Library + jsdom | components, hooks, reducers, HyperFormula adapter, undo grouping; grid interaction against the `fake` adapter |
-| grid port contract | Vitest (fake adapter) + Playwright component tests (AG Grid adapter) | the same suite run against every adapter: geometry, hit-testing, refresh, event mapping |
-| web hermetic e2e | Playwright | real built SPA, **no real backend**: REST mocked with `page.route`, collaboration WebSocket mocked with `page.routeWebSocket` driving an in-test Yjs doc (so we can simulate a "remote user" and server errors deterministically) |
-| optional full-stack smoke | Playwright against `docker compose` | a couple of happy-path flows, run in CI nightly, not per commit |
+| Layer                     | Tool                                                                                              | What                                                                                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| shared                    | Vitest                                                                                            | formula id-ref codec, doc accessors, zod schemas — property tests for codec round-trips                                                                                                                                           |
+| server functional         | Vitest + `fastify.inject` + Testcontainers Postgres                                               | routes, ACL matrix, session handling, migrations                                                                                                                                                                                  |
+| server e2e                | Vitest + real server on a random port + Testcontainers + two `HocuspocusProvider` clients in Node | signup → create workbook → two users edit → convergence; viewer writes dropped; revoked access closes socket; persistence survives restart                                                                                        |
+| web functional            | Vitest + Testing Library + jsdom                                                                  | components, hooks, reducers, HyperFormula adapter, undo grouping; grid interaction against the `fake` adapter                                                                                                                     |
+| grid port contract        | Vitest (fake adapter) + Playwright component tests (AG Grid adapter)                              | the same suite run against every adapter: geometry, hit-testing, refresh, event mapping                                                                                                                                           |
+| web hermetic e2e          | Playwright                                                                                        | real built SPA, **no real backend**: REST mocked with `page.route`, collaboration WebSocket mocked with `page.routeWebSocket` driving an in-test Yjs doc (so we can simulate a "remote user" and server errors deterministically) |
+| optional full-stack smoke | Playwright against `docker compose`                                                               | a couple of happy-path flows, run in CI nightly, not per commit                                                                                                                                                                   |
 
 Gate summary is in `CLAUDE.md`. Running every e2e suite in a pre-commit hook would make commits take minutes, so the local hook runs the fast checks and CI runs everything on every pushed commit — main only accepts green commits.
 
@@ -172,13 +184,13 @@ Gate summary is in `CLAUDE.md`. Running every e2e suite in a pre-commit hook wou
 
 ## 7. Open decisions (ask before deciding)
 
-| Decision | Notes | Needed by |
-|---|---|---|
-| Repo license | HyperFormula's free key is GPLv3, so the project should be GPLv3-compatible (GPLv3 or AGPLv3) unless a commercial HyperFormula license is bought | M0 (`LICENSE` file), before going public at the latest |
-| GitHub repo name and visibility | Public suits GPL and a portfolio; private is fine until launch | M0 |
-| Hosting regions | Developer is in Delhi. Pick Neon and Railway regions close to each other and to users (Singapore is the likely nearest pair; confirm what both offer) | M0, when the Neon project and Railway service are created |
-| Custom domain | Optional; Railway's default domain works | M9 |
-| Grid adapter | AG Grid Community for now (ADR-0001); revisit only if overlay alignment or performance becomes a real problem | After M4b/M6 |
+| Decision                        | Notes                                                                                                                                                 | Needed by                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Repo license                    | HyperFormula's free key is GPLv3, so the project should be GPLv3-compatible (GPLv3 or AGPLv3) unless a commercial HyperFormula license is bought      | M0 (`LICENSE` file), before going public at the latest    |
+| GitHub repo name and visibility | Public suits GPL and a portfolio; private is fine until launch                                                                                        | M0                                                        |
+| Hosting regions                 | Developer is in Delhi. Pick Neon and Railway regions close to each other and to users (Singapore is the likely nearest pair; confirm what both offer) | M0, when the Neon project and Railway service are created |
+| Custom domain                   | Optional; Railway's default domain works                                                                                                              | M9                                                        |
+| Grid adapter                    | AG Grid Community for now (ADR-0001); revisit only if overlay alignment or performance becomes a real problem                                         | After M4b/M6                                              |
 
 ## 8. Status narrative
 

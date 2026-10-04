@@ -38,30 +38,45 @@ Data flow: `adapter event → interaction → Command → Yjs transaction → Sh
 Coordinates crossing the port are **visual indices** (row/col position on screen). The adapter never sees row/col ids, Yjs or HyperFormula. `SheetViewModel` translates index ⇄ id.
 
 ```ts
-export interface CellCoord { row: number; col: number }          // visual indices
-export interface CellRange { start: CellCoord; end: CellCoord }  // inclusive, normalized
-export interface Rect { x: number; y: number; width: number; height: number } // relative to grid viewport
+export interface CellCoord {
+  row: number;
+  col: number;
+} // visual indices
+export interface CellRange {
+  start: CellCoord;
+  end: CellCoord;
+} // inclusive, normalized
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} // relative to grid viewport
 
 export interface GridDimensions {
   rowCount: number;
   colCount: number;
   rowHeight(row: number): number;
   colWidth(col: number): number;
-  colLabel(col: number): string;   // "A", "B", …
+  colLabel(col: number): string; // "A", "B", …
 }
 
-export interface CellRenderData { text: string; format?: CellFormat; error?: boolean }
+export interface CellRenderData {
+  text: string;
+  format?: CellFormat;
+  error?: boolean;
+}
 
 export interface GridView {
   mount(el: HTMLElement, dims: GridDimensions, getCell: (c: CellCoord) => CellRenderData): void;
   destroy(): void;
 
   // rendering
-  setDimensions(dims: GridDimensions): void;           // after structure ops
-  refreshCells(cells: CellCoord[] | 'all'): void;      // after value/format changes
+  setDimensions(dims: GridDimensions): void; // after structure ops
+  refreshCells(cells: CellCoord[] | "all"): void; // after value/format changes
 
   // geometry (powers overlays, fill handle, floating editor)
-  getCellRect(c: CellCoord): Rect | null;              // null = not rendered
+  getCellRect(c: CellCoord): Rect | null; // null = not rendered
   hitTest(clientX: number, clientY: number): CellCoord | HeaderHit | null;
   getVisibleRange(): CellRange;
   scrollIntoView(c: CellCoord): void;
@@ -72,7 +87,8 @@ export interface GridView {
   on<E extends keyof GridEvents>(event: E, handler: GridEvents[E]): () => void;
 }
 
-export type HeaderHit = { kind: 'rowHeader'; row: number } | { kind: 'colHeader'; col: number } | { kind: 'corner' };
+export type HeaderHit =
+  { kind: "rowHeader"; row: number } | { kind: "colHeader"; col: number } | { kind: "corner" };
 
 export interface GridEvents {
   pointerDown(target: CellCoord | HeaderHit, e: PointerInfo): void;
@@ -80,11 +96,11 @@ export interface GridEvents {
   pointerUp(target: CellCoord | HeaderHit | null, e: PointerInfo): void;
   doubleClick(target: CellCoord | HeaderHit): void;
   contextMenu(target: CellCoord | HeaderHit, clientX: number, clientY: number): void;
-  keyDown(e: KeyInfo): void;                              // adapter suppresses its own key handling
+  keyDown(e: KeyInfo): void; // adapter suppresses its own key handling
   scroll(visible: CellRange): void;
   columnResized(col: number, width: number): void;
   rowResized(row: number, height: number): void;
-  columnMoveRequested(from: number, to: number): void;    // adapter reverts its own move; model decides
+  columnMoveRequested(from: number, to: number): void; // adapter reverts its own move; model decides
   rowMoveRequested(from: number, to: number): void;
 }
 ```

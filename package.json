@@ -1,0 +1,43 @@
+{
+  "name": "worksheet-clone",
+  "private": true,
+  "version": "0.0.0",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.1.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e:server": "turbo run test:e2e:server",
+    "test:e2e:web": "turbo run test:e2e:web",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "docker:build": "docker build -f docker/Dockerfile -t worksheet-clone .",
+    "docker:up": "docker compose -f docker/docker-compose.yml up",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@worksheet-clone/config": "workspace:*",
+    "eslint": "^9.16.0",
+    "turbo": "^2.3.0",
+    "prettier": "^3.4.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}

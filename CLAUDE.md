@@ -24,22 +24,22 @@ Before any grid work, also read `docs/adr/0001-grid-abstraction.md`.
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Language | TypeScript everywhere (`strict: true`, no `any` without a comment explaining why) |
-| Monorepo | pnpm workspaces (+ Turborepo for task caching) |
-| Frontend | React + Vite, Redux Toolkit (+ RTK Query for REST), HyperFormula |
-| Grid | AG Grid **Community** as a render-only adapter behind our `GridView` port (ADR-0001) |
-| Realtime | Yjs (CRDT) + `@hocuspocus/provider` on the client, `@hocuspocus/server` on the backend |
-| Backend | Fastify (REST) + Hocuspocus (WebSocket) in one Node process |
-| Database | Postgres via Drizzle ORM + `drizzle-kit` migrations; Neon in prod, Docker Postgres locally/CI |
-| Validation | Zod schemas in `packages/shared`, used by both client and server |
-| Auth | Email + password (argon2id), server-side sessions in Postgres, httpOnly secure cookie |
-| Testing | Vitest (unit/functional, both apps), Testing Library (React), Testcontainers (backend e2e), Playwright (frontend hermetic e2e) |
-| Lint/format | ESLint (typescript-eslint, react-hooks) + Prettier |
-| Git hooks | Husky + lint-staged |
-| Container | Single multi-stage Dockerfile → one image (Fastify serves the built SPA, REST and WS) |
-| Hosting | Railway (Hobby, serverless sleep enabled) + Neon Postgres (free tier, scale-to-zero) |
+| Layer       | Choice                                                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Language    | TypeScript everywhere (`strict: true`, no `any` without a comment explaining why)                                              |
+| Monorepo    | pnpm workspaces (+ Turborepo for task caching)                                                                                 |
+| Frontend    | React + Vite, Redux Toolkit (+ RTK Query for REST), HyperFormula                                                               |
+| Grid        | AG Grid **Community** as a render-only adapter behind our `GridView` port (ADR-0001)                                           |
+| Realtime    | Yjs (CRDT) + `@hocuspocus/provider` on the client, `@hocuspocus/server` on the backend                                         |
+| Backend     | Fastify (REST) + Hocuspocus (WebSocket) in one Node process                                                                    |
+| Database    | Postgres via Drizzle ORM + `drizzle-kit` migrations; Neon in prod, Docker Postgres locally/CI                                  |
+| Validation  | Zod schemas in `packages/shared`, used by both client and server                                                               |
+| Auth        | Email + password (argon2id), server-side sessions in Postgres, httpOnly secure cookie                                          |
+| Testing     | Vitest (unit/functional, both apps), Testing Library (React), Testcontainers (backend e2e), Playwright (frontend hermetic e2e) |
+| Lint/format | ESLint (typescript-eslint, react-hooks) + Prettier                                                                             |
+| Git hooks   | Husky + lint-staged                                                                                                            |
+| Container   | Single multi-stage Dockerfile → one image (Fastify serves the built SPA, REST and WS)                                          |
+| Hosting     | Railway (Hobby, serverless sleep enabled) + Neon Postgres (free tier, scale-to-zero)                                           |
 
 ## Repository layout
 
@@ -112,10 +112,10 @@ pnpm docker:up           # run prod-like stack locally (app + postgres)
 
 ## Quality gates
 
-| Where | Runs |
-|---|---|
-| pre-commit (Husky + lint-staged) | prettier + eslint on staged files, `pnpm typecheck`, `vitest related` on staged files |
-| pre-push | `pnpm test` + `pnpm test:e2e:web` |
+| Where                              | Runs                                                                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| pre-commit (Husky + lint-staged)   | prettier + eslint on staged files, `pnpm typecheck`, `vitest related` on staged files                                                  |
+| pre-push                           | `pnpm test` + `pnpm test:e2e:web`                                                                                                      |
 | CI (GitHub Actions, every push/PR) | format:check, lint, typecheck, test, test:e2e:server, test:e2e:web, docker build. **CI is the authoritative gate; main is protected.** |
 
 Never bypass hooks with `--no-verify`. A change is done only when the relevant tests exist and pass.
