@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerHealthRoute } from "./http/health.js";
+import { registerSessionPlugin } from "./http/session.js";
 
 // In the monorepo (and the pre-pack Docker build stage), apps/web/dist sits
 // two levels up from this file. The final Docker runtime stage copies that
@@ -14,6 +15,7 @@ const webDistDir =
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: true });
 
+  registerSessionPlugin(app);
   registerHealthRoute(app);
 
   if (process.env.NODE_ENV === "production" && existsSync(webDistDir)) {
@@ -27,7 +29,7 @@ export function buildApp(): FastifyInstance {
         void reply.sendFile("index.html");
         return;
       }
-      void reply.code(404).send({ error: { code: "not_found", message: "Not found" } });
+      void reply.code(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
     });
   }
 
