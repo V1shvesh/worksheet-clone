@@ -34,7 +34,8 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "eslint --fix"
+      "eslint --fix",
+      "node scripts/vitest-related.mjs"
     ],
     "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
       "prettier --write"
