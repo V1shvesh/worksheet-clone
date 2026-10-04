@@ -1,1 +1,1 @@
-export { healthResponseSchema, type HealthResponse } from "./health";
+export { healthResponseSchema, type HealthResponse } from "./health.js";
