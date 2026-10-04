@@ -27,9 +27,13 @@ function extractRawCookie(setCookieHeader: string | string[] | undefined): strin
   return match[1];
 }
 
+const EMAIL_PATTERN = "test-session-%@example.com";
+
 afterEach(async () => {
-  await db.execute(sql`delete from sessions`);
-  await db.execute(sql`delete from users where email like 'test-session-%@example.com'`);
+  await db.execute(
+    sql`delete from sessions where user_id in (select id from users where email like ${EMAIL_PATTERN})`,
+  );
+  await db.execute(sql`delete from users where email like ${EMAIL_PATTERN}`);
 });
 
 afterAll(async () => {

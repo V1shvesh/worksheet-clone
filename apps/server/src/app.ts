@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
+import { registerAuthRoutes } from "./http/auth.js";
 import { registerHealthRoute } from "./http/health.js";
 import { registerSessionPlugin } from "./http/session.js";
 
@@ -17,6 +18,7 @@ export function buildApp(): FastifyInstance {
 
   registerSessionPlugin(app);
   registerHealthRoute(app);
+  registerAuthRoutes(app);
 
   if (process.env.NODE_ENV === "production" && existsSync(webDistDir)) {
     void app.register(fastifyStatic, {

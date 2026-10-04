@@ -4,13 +4,20 @@ import { db, pool } from "../db/client.js";
 import { createSession, deleteSession, getSessionUser, login, signup } from "./auth.js";
 import { DomainError } from "./errors.js";
 
+// A prefix unique to this file: other test files run against the same
+// local Postgres instance concurrently, and an overlapping pattern here
+// deleted their in-flight rows out from under them (see failure-log.md).
+const EMAIL_PATTERN = "test-domain-auth-%@example.com";
+
 async function uniqueEmail(): Promise<string> {
-  return `test-${crypto.randomUUID()}@example.com`;
+  return `test-domain-auth-${crypto.randomUUID()}@example.com`;
 }
 
 afterEach(async () => {
-  await db.execute(sql`delete from sessions`);
-  await db.execute(sql`delete from users where email like 'test-%@example.com'`);
+  await db.execute(
+    sql`delete from sessions where user_id in (select id from users where email like ${EMAIL_PATTERN})`,
+  );
+  await db.execute(sql`delete from users where email like ${EMAIL_PATTERN}`);
 });
 
 afterAll(async () => {

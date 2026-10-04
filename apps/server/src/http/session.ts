@@ -2,6 +2,7 @@ import cookie from "@fastify/cookie";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthUser } from "@worksheet-clone/shared";
 import { getSessionUser } from "../domain/auth.js";
+import { sendApiError } from "./errors.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -40,13 +41,13 @@ export async function requireUser(request: FastifyRequest, reply: FastifyReply):
   const unsigned = raw ? request.unsignCookie(raw) : null;
 
   if (!unsigned?.valid || !unsigned.value) {
-    await reply.code(401).send({ error: { code: "UNAUTHORIZED", message: "Not logged in" } });
+    sendApiError(reply, "UNAUTHORIZED", "Not logged in");
     return;
   }
 
   const user = await getSessionUser(unsigned.value);
   if (!user) {
-    await reply.code(401).send({ error: { code: "UNAUTHORIZED", message: "Session expired" } });
+    sendApiError(reply, "UNAUTHORIZED", "Session expired");
     return;
   }
 
