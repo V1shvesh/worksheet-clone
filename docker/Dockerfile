@@ -16,6 +16,8 @@ RUN pnpm install --frozen-lockfile
 # ---- build: compile shared, server and web
 FROM deps AS build
 COPY . .
+# NOTE: as of 2026-10-04 this fails under injectWorkspacePackages (see
+# docs/failure-log.md) — unresolved, revisit before relying on this image.
 RUN pnpm build
 
 # ---- deploy: produce a pruned, standalone server (prod deps + its workspace deps)

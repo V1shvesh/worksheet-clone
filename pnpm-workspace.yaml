@@ -3,3 +3,6 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
+# Required for `pnpm deploy` (docker/Dockerfile's deploy stage) to bundle
+# workspace dependencies as real copies instead of symlinks.
+injectWorkspacePackages: true
