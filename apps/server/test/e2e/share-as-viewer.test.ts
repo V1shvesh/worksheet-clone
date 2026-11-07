@@ -18,8 +18,8 @@ async function workbooksOf(user: HttpUser): Promise<WorkbookSummary[]> {
 
 describe("M2 done-when: share a workbook as viewer (real server, real Postgres)", () => {
   it("A shares with B as viewer; B sees it but cannot delete it", async () => {
-    const alice = new HttpUser(stack.baseUrl, "e2e-alice@example.com");
-    const bob = new HttpUser(stack.baseUrl, "e2e-bob@example.com");
+    const alice = new HttpUser(stack, "e2e-alice@example.com");
+    const bob = new HttpUser(stack, "e2e-bob@example.com");
     await alice.signup();
     await bob.signup();
 

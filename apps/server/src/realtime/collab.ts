@@ -115,10 +115,16 @@ export function mountCollab(app: FastifyInstance, extensions: Extension[] = []):
     void ws.handleUpgrade(request, socket, head);
   });
 
-  // Close sockets so the last-disconnect path stores and unloads each doc,
-  // then wait (bounded) for that to finish before the pool is torn down.
-  app.addHook("onClose", async () => {
-    hocuspocus.closeConnections();
+  // Close the WebSockets themselves (code 1001 "going away"): Node's
+  // server.close() waits for upgraded sockets too, and hocuspocus's
+  // closeConnections() only closes per-document connections, leaving sockets
+  // open — shutdown would hang for as long as any client stayed connected.
+  // Each socket close runs the last-disconnect path (store + unload); wait,
+  // bounded, for that. This must be preClose: onClose hooks only run after
+  // the HTTP server has finished closing, which is what these open sockets
+  // block — a deadlock.
+  app.addHook("preClose", async () => {
+    ws.closeAll(1001, "server shutting down");
     const deadline = Date.now() + 5_000;
     while (hocuspocus.getDocumentsCount() > 0 && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 25));

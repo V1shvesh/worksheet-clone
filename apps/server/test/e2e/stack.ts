@@ -3,7 +3,10 @@ import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 
 export interface Stack {
-  baseUrl: string;
+  readonly baseUrl: string;
+  readonly server: FastifyInstance;
+  /** Stops the server (flushing open docs) and starts a fresh one on the same database. */
+  restartServer: () => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -24,15 +27,28 @@ export async function startStack(): Promise<Stack> {
   await migrate(client.db, { migrationsFolder: "./src/db/migrations" });
 
   const { buildApp } = await import("../../src/app.js");
-  const server: FastifyInstance = buildApp();
-  await server.listen({ port: 0, host: "127.0.0.1" });
-  const address = server.server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
+  async function listen(): Promise<{ server: FastifyInstance; baseUrl: string }> {
+    const server = buildApp();
+    await server.listen({ port: 0, host: "127.0.0.1" });
+    const address = server.server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    return { server, baseUrl: `http://127.0.0.1:${port}` };
+  }
 
+  let current = await listen();
   return {
-    baseUrl: `http://127.0.0.1:${port}`,
+    get baseUrl() {
+      return current.baseUrl;
+    },
+    get server() {
+      return current.server;
+    },
+    restartServer: async () => {
+      await current.server.close();
+      current = await listen();
+    },
     stop: async () => {
-      await server.close();
+      await current.server.close();
       await pool.end();
       await container.stop();
     },
@@ -40,15 +56,16 @@ export async function startStack(): Promise<Stack> {
 }
 
 export class HttpUser {
-  private cookie = "";
+  cookie = "";
 
+  // Takes the stack (not a URL) so requests follow a server restart.
   constructor(
-    private readonly baseUrl: string,
+    private readonly stack: { readonly baseUrl: string },
     readonly email: string,
   ) {}
 
   async request(method: string, path: string, body?: unknown): Promise<Response> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const response = await fetch(`${this.stack.baseUrl}${path}`, {
       method,
       headers: {
         ...(body === undefined ? {} : { "content-type": "application/json" }),
