@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type * as Y from "yjs";
-import { setSheetName } from "@worksheet-clone/shared";
+import { setCell, setSheetName, type CellData } from "@worksheet-clone/shared";
 import { LOCAL_ORIGIN } from "./origin";
 import { useWorkbookDoc } from "./WorkbookDoc";
 
@@ -24,6 +24,18 @@ export function renameSheet(doc: Y.Doc, readOnly: boolean, sheetId: string, name
     return false;
   }
   return transact(doc, readOnly, () => setSheetName(doc, sheetId, trimmed));
+}
+
+/** Sets or clears (`undefined`) one cell in a single transaction. */
+export function setCellContent(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  rowId: string,
+  colId: string,
+  data: CellData | undefined,
+): boolean {
+  return transact(doc, readOnly, () => setCell(doc, sheetId, rowId, colId, data));
 }
 
 export function useWorkbookMutations() {
