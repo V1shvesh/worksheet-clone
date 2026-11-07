@@ -3,7 +3,7 @@ import * as Y from "yjs";
 import { getCell, readColOrder, readRowOrder } from "@worksheet-clone/shared";
 import { LOCAL_ORIGIN } from "../../../crdt/origin";
 import { createFormulaEngine, type FormulaEngine } from "../../../engine";
-import { newDoc } from "../../../test-utils/workbook";
+import { edit, newDoc } from "../../../test-utils/workbook";
 import { FakeGridView } from "../adapters/fake/fake-grid-view";
 import { connectModelToView, SheetViewModel } from "../model";
 import { setCellInput } from "./set-cell-input";
@@ -124,5 +124,31 @@ describe("engine + view model + fake grid", () => {
     expect(view.displayedText({ row: 1, col: 0 })).toBe("10");
     expect(model.getRawInput({ row: 3, col: 0 })).toBe("=SUM(A1:A3)");
     model.destroy();
+  });
+});
+
+describe("editing a cell without changing it keeps its content", () => {
+  it.each([
+    ["number", { v: 42 }],
+    ["boolean", { v: false }],
+    ["plain text", { v: "hello" }],
+    ["text that looks like a number", { v: "007" }],
+    ["text that looks like a boolean", { v: "TRUE" }],
+    ["text that looks like a formula", { v: "=not a formula" }],
+    ["text starting with an apostrophe", { v: "'quoted" }],
+    ["whitespace-only text", { v: "   " }],
+    ["text with surrounding spaces", { v: "  padded  " }],
+  ] as const)("%s", (_label, data) => {
+    const { doc, sheetId } = newDoc();
+    const engine = createFormulaEngine(doc);
+    const model = new SheetViewModel(doc, sheetId, engine);
+    const coord = { row: 0, col: 0 };
+    edit(doc, sheetId, 0, 0, data);
+
+    setCellInput({ doc, readOnly: false }, sheetId, coord, model.getRawInput(coord));
+
+    expect(stored(doc, sheetId, 0, 0)).toEqual(data);
+    model.destroy();
+    engine.destroy();
   });
 });

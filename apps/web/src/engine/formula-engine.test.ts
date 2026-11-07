@@ -39,6 +39,18 @@ describe("formula engine", () => {
     expect(engine.getValue("nope", 0, 0)).toBeNull();
   });
 
+  it("treats a reference to an empty cell as 0, like Excel and Google Sheets", () => {
+    const { doc, sheetId } = newDoc();
+    doc.transact(() => {
+      put(doc, sheetId, 0, 0, { f: "=B1" });
+      put(doc, sheetId, 1, 0, { f: "=B1+1" });
+    });
+    engine = createFormulaEngine(doc);
+    expect(engine.getValue(sheetId, 0, 0)).toBe(0);
+    expect(engine.getValue(sheetId, 1, 0)).toBe(1);
+    expect(engine.getValue(sheetId, 0, 1)).toBeNull();
+  });
+
   it("recomputes a dependent and reports both edited and dependent cells", () => {
     const { doc, sheetId } = newDoc();
     doc.transact(() => {

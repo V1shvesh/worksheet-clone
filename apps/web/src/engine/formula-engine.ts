@@ -64,7 +64,9 @@ function indexOf(ids: string[]): Map<string, number> {
 }
 
 export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
-  const hf = HyperFormula.buildEmpty({ licenseKey: "gpl-v3" });
+  // evaluateNullToZero: a reference to an empty cell is 0, as in Excel and
+  // Google Sheets (HyperFormula's default shows it as empty).
+  const hf = HyperFormula.buildEmpty({ licenseKey: "gpl-v3", evaluateNullToZero: true });
   // The HF sheet name is our sheet id, so renames never touch the engine.
   const sheets = new Map<string, SheetState>();
   const sheetIdByHfId = new Map<number, string>();

@@ -14,6 +14,7 @@ import {
   type CellFormat,
 } from "@worksheet-clone/shared";
 import type { EngineValue, FormulaEngine } from "../../../engine";
+import { parseCellInput } from "../commands/parse-cell-input";
 import type { CellCoord, CellRenderData, GridDimensions } from "../port";
 
 export const DEFAULT_ROW_HEIGHT = 24;
@@ -173,6 +174,7 @@ export class SheetViewModel {
       });
     }
     if (typeof data.v === "boolean") return data.v ? "TRUE" : "FALSE";
+    if (typeof data.v === "string") return textAsInput(data.v);
     return data.v === undefined ? "" : String(data.v);
   }
 
@@ -185,4 +187,11 @@ export class SheetViewModel {
     for (const cleanup of this.cleanups.splice(0)) cleanup();
     this.listeners.clear();
   }
+}
+
+// Text that would re-parse as something else ("007", "TRUE", "=x", "'a", "  ")
+// gets Excel's leading apostrophe, so committing the editor unchanged keeps it text.
+function textAsInput(text: string): string {
+  const parsed = parseCellInput(text);
+  return parsed.kind === "value" && parsed.value === text ? text : `'${text}`;
 }

@@ -100,8 +100,8 @@ describe("SheetViewModel", () => {
       expect(text(4)).toBe("hello");
       expect(text(5)).toBe("007");
       expect(text(6)).toBe("0.33333333333");
-      // HyperFormula yields an empty value (not 0) for a bare reference to an empty cell.
-      expect(text(7)).toBe("");
+      // A reference to an empty cell is 0, as in Excel and Google Sheets.
+      expect(text(7)).toBe("0");
       expect(model.getCell({ row: 20, col: 0 })).toEqual({ text: "" });
     });
 
