@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { mockSession } from "./fixtures/session";
+import { mockApiFallback, mockSession } from "./fixtures/session";
+
+test.beforeEach(async ({ page }) => {
+  await mockApiFallback(page);
+});
 
 test.describe("auth", () => {
   test("redirects an unauthenticated visitor from / to /login", async ({ page }) => {

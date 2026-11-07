@@ -3,8 +3,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { LoginPage } from "../features/auth/LoginPage";
 import { RequireAuth } from "../features/auth/RequireAuth";
 import { SignupPage } from "../features/auth/SignupPage";
+import { WorkbookPage } from "../features/workbooks/WorkbookPage";
+import { WorkbooksPage } from "../features/workbooks/WorkbooksPage";
 import { store } from "./store";
-import { HomePage } from "./HomePage";
 
 export function App() {
   return (
@@ -14,7 +15,8 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route element={<RequireAuth />}>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<WorkbooksPage />} />
+            <Route path="/workbooks/:id" element={<WorkbookPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

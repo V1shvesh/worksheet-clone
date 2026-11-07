@@ -5,6 +5,15 @@ export function json(status: number, body: unknown) {
   return { status, contentType: "application/json", body: JSON.stringify(body) };
 }
 
+// Without this, `vite preview` answers unmocked /api calls with index.html
+// (200), which surfaces as confusing JSON parse errors. Playwright gives the
+// most recently registered route priority, so register this first.
+export async function mockApiFallback(page: Page) {
+  await page.route("**/api/**", (route) =>
+    route.fulfill(json(404, { error: { code: "NOT_FOUND", message: "Not mocked" } })),
+  );
+}
+
 // Stateful stand-in for the auth endpoints: /me answers from the current
 // session, and login/signup/logout change it — so specs exercise the same
 // 401 -> 200 -> 401 transitions a real server would produce.
