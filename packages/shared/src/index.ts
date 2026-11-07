@@ -31,3 +31,4 @@ export {
   type ChangeRoleInput,
 } from "./workbooks.js";
 export * from "./doc-schema.js";
+export * from "./formula-refs.js";
