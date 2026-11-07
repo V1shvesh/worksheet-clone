@@ -7,6 +7,12 @@ export type Role = z.infer<typeof roleSchema>;
 export const assignableRoleSchema = z.enum(["editor", "viewer"]);
 export type AssignableRole = z.infer<typeof assignableRoleSchema>;
 
+export const workbookParamsSchema = z.object({ id: z.string().uuid() });
+export const memberParamsSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+});
+
 export const workbookNameSchema = z.string().trim().min(1).max(100);
 
 export const createWorkbookSchema = z.object({ name: workbookNameSchema });

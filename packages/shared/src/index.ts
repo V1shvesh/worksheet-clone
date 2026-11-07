@@ -14,6 +14,8 @@ export {
   type Role,
   assignableRoleSchema,
   type AssignableRole,
+  workbookParamsSchema,
+  memberParamsSchema,
   workbookNameSchema,
   createWorkbookSchema,
   type CreateWorkbookInput,

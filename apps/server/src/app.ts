@@ -6,6 +6,7 @@ import { registerAuthRoutes } from "./http/auth.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
 import { registerSessionPlugin } from "./http/session.js";
+import { registerWorkbookRoutes } from "./http/workbooks.js";
 
 // In the monorepo (and the pre-pack Docker build stage), apps/web/dist sits
 // two levels up from this file. The final Docker runtime stage copies that
@@ -22,6 +23,7 @@ export function buildApp(): FastifyInstance {
   registerSessionPlugin(app);
   registerHealthRoute(app);
   registerAuthRoutes(app);
+  registerWorkbookRoutes(app);
 
   const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
   if (serveSpa) {
