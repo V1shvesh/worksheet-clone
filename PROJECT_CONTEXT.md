@@ -108,7 +108,7 @@ Browser                                         Railway container               
 ### 3.1 Y.Doc schema (one doc per workbook)
 
 ```
-doc.getMap('meta')          → { name: string, schemaVersion: number }
+doc.getMap('meta')          → { schemaVersion: number }
 doc.getArray('sheetOrder')  → sheetId[]
 doc.getMap('sheets')        → sheetId → Y.Map {
     name: string, hidden: boolean,
@@ -118,6 +118,8 @@ doc.getMap('sheets')        → sheetId → Y.Map {
     colWidths / rowHeights: Y.Map<id, number>
 }
 ```
+
+**Why the workbook name is not in the doc (decided 2026-11-07):** the workbook list needs every name without loading every Y.Doc, so `workbooks.name` in Postgres is the single source of truth. Renames go through `PATCH /api/workbooks/:id` (owner only); keeping a second copy in `meta` would need syncing and could drift.
 
 **Why stable row/col ids:** with positional keys (`A1`), a user inserting a row while another edits `A5` would make the edit land in the wrong cell after merge. With ids, structure ops (insert/delete/reorder) only touch `rowOrder`/`colOrder`, and cell edits merge cleanly.
 
@@ -199,3 +201,4 @@ Gate summary is in `CLAUDE.md`. Running every e2e suite in a pre-commit hook wou
 - 2026-10-04: Planning docs placed in `~/projects/worksheet-clone` (no git repo or code yet). Work moves to Claude Code. Next: propose the M0 plan, then build it.
 - 2026-10-04: M0 walking skeleton built and verified locally (repo, pnpm/Turborepo, packages/shared, Fastify health route, Vite/React/Redux web app, Husky hooks, CI workflow definition, Dockerfile + compose). Pushed to a public GitHub repo once with explicit permission. **Not actually deployed to Railway/Neon yet** — deployment was explicitly deprioritized in favor of local correctness; the Dockerfile's build stage has a known-unresolved failure under `injectWorkspacePackages` (see `docs/failure-log.md`) that needs revisiting before a real deploy.
 - 2026-10-04: M1 Auth complete, built and verified entirely locally (no GitHub push). Drizzle schema + migrations (users, sessions) against a local docker-compose Postgres; framework-free `domain/auth.ts` (argon2id hashing, session create/get/delete); signed httpOnly session cookie + `requireUser` preHandler; REST routes `POST /api/auth/signup|login|logout`, `GET /api/auth/me` with login rate-limited (5/min); web signup/login pages + RTK Query `authApi` + a `RequireAuth` route guard. Tested at every layer: Vitest unit/functional (incl. a real-Postgres domain test), a Testcontainers-backed server e2e (signup → me over a real HTTP+cookie round trip), and a hermetic Playwright suite (mocked REST). Three real bugs found and fixed along the way, logged in `docs/failure-log.md`: an `@fastify/rate-limit` `onRoute`-hook timing bug, cross-test-file Postgres cleanup collisions, and an RTK-Query-under-jsdom `AbortController` incompatibility. Next: M2 — Workbooks + ACL.
+- 2026-11-07: M2 Workbooks + ACL complete, built and verified locally (no GitHub push). Tables `workbooks`, `workbook_members` (ownership = a member row with role `owner`), `yjs_documents`, `yjs_snapshots`; framework-free `domain/acl.ts` role→permission map (exhaustively tested) plus workbook/member services; REST for workbooks and members; a global Fastify error handler so every error uses `{ error: { code, message } }`; web workbooks page (owned/shared, create, delete-with-confirm), members dialog, and a `/workbooks/:id` placeholder for M3. Decisions: non-members get 404 (ids can't be probed), the workbook name lives only in Postgres (§3.1 updated), and there's no ownership transfer or self-leave in v1. Verified with domain/functional tests, a Testcontainers e2e of the done-when scenario, hermetic Playwright, and a two-user run against the real dev stack. Fixed along the way (logged in `docs/failure-log.md`): unexpected 500s leaked raw error messages; logout left the page signed in; login after a redirect bounced back to `/login`. Not done: styling (pages are unstyled HTML); the Docker build failure from M0 is still open. Next: M3 — realtime document backbone.

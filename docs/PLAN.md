@@ -67,7 +67,7 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 
 ## M5 — Workbook page & sheet tabs
 
-- Empty initial state (new workbook = one empty sheet), workbook rename in header
+- Empty initial state (new workbook = one empty sheet), workbook rename in header (via `PATCH /api/workbooks/:id`; the name lives in Postgres, not the Y.Doc)
 - Bottom tab bar: add, rename (double-click), hide/unhide, delete (confirm; can't delete last visible), switch, reorder (drag)
 - Cross-sheet references (`Sheet2!A1`) in the codec and HyperFormula
   **Done when:** Playwright covers the full sheet lifecycle with a simulated remote user renaming a tab.
