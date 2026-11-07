@@ -1,8 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../app/apiErrors";
+import { WorkbookDocProvider } from "../../crdt/WorkbookDoc";
+import { LiveWorkbook } from "./LiveWorkbook";
 import { useGetWorkbookQuery } from "./workbooksApi";
 
-// Placeholder until M3 mounts the realtime document here.
 export function WorkbookPage() {
   const { id = "" } = useParams();
   const { data: workbook, isLoading, isError, error } = useGetWorkbookQuery(id);
@@ -18,6 +19,10 @@ export function WorkbookPage() {
         <>
           <h1>{workbook.name}</h1>
           <p>Your role: {workbook.role}</p>
+          {/* Only connect once REST has confirmed membership. */}
+          <WorkbookDocProvider workbookId={workbook.id}>
+            <LiveWorkbook />
+          </WorkbookDocProvider>
         </>
       )}
     </main>
