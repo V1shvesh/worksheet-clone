@@ -14,12 +14,15 @@
     "test:e2e:web": "playwright test"
   },
   "dependencies": {
+    "@hocuspocus/provider": "^4.8.0",
     "@reduxjs/toolkit": "^2.3.0",
     "@worksheet-clone/shared": "workspace:*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-redux": "^9.1.0",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^6.28.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
