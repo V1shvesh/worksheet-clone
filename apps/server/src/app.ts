@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerAuthRoutes } from "./http/auth.js";
+import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
 import { registerSessionPlugin } from "./http/session.js";
 
@@ -16,24 +17,27 @@ const webDistDir =
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: true });
 
+  // Must come before any register() so encapsulated route plugins inherit it.
+  registerErrorHandler(app);
   registerSessionPlugin(app);
   registerHealthRoute(app);
   registerAuthRoutes(app);
 
-  if (process.env.NODE_ENV === "production" && existsSync(webDistDir)) {
+  const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
+  if (serveSpa) {
     void app.register(fastifyStatic, {
       root: webDistDir,
       wildcard: false,
     });
-
-    app.setNotFoundHandler((request, reply) => {
-      if (request.method === "GET" && !request.url.startsWith("/api/")) {
-        void reply.sendFile("index.html");
-        return;
-      }
-      void reply.code(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
-    });
   }
+
+  app.setNotFoundHandler((request, reply) => {
+    if (serveSpa && request.method === "GET" && !request.url.startsWith("/api/")) {
+      void reply.sendFile("index.html");
+      return;
+    }
+    sendApiError(reply, "NOT_FOUND", "Not found");
+  });
 
   return app;
 }

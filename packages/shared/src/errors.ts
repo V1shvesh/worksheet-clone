@@ -8,6 +8,8 @@ export const apiErrorCodes = [
   "USER_NOT_FOUND",
   "ALREADY_MEMBER",
   "INVALID_MEMBER_OPERATION",
+  "RATE_LIMITED",
+  "INTERNAL_ERROR",
 ] as const;
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number];
