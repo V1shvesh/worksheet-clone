@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { Dialog } from "./Dialog";
 
 interface ConfirmDialogProps {
   title: string;
@@ -19,7 +20,6 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   // Focus the safe choice so a stray Enter doesn't confirm a destructive action.
@@ -28,17 +28,7 @@ export function ConfirmDialog({
   }, []);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          onCancel();
-        }
-      }}
-    >
-      <h2 id={titleId}>{title}</h2>
+    <Dialog title={title} onClose={onCancel}>
       <p>{message}</p>
       {error && <p role="alert">{error}</p>}
       <button type="button" ref={cancelRef} onClick={onCancel}>
@@ -47,6 +37,6 @@ export function ConfirmDialog({
       <button type="button" onClick={onConfirm} disabled={busy}>
         {confirmLabel}
       </button>
-    </div>
+    </Dialog>
   );
 }

@@ -4,6 +4,7 @@ import type { WorkbookSummary } from "@worksheet-clone/shared";
 import { getApiErrorMessage } from "../../app/apiErrors";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useLogoutMutation, useMeQuery } from "../auth/authApi";
+import { MembersDialog } from "./MembersDialog";
 import {
   useCreateWorkbookMutation,
   useDeleteWorkbookMutation,
@@ -15,6 +16,7 @@ export function WorkbooksPage() {
   const [logout] = useLogoutMutation();
   const { data: workbooks, isLoading, isError, error } = useListWorkbooksQuery();
   const [pendingDelete, setPendingDelete] = useState<WorkbookSummary | null>(null);
+  const [membersOf, setMembersOf] = useState<WorkbookSummary | null>(null);
 
   const owned = workbooks?.filter((workbook) => workbook.role === "owner") ?? [];
   const shared = workbooks?.filter((workbook) => workbook.role !== "owner") ?? [];
@@ -40,15 +42,19 @@ export function WorkbooksPage() {
             title="My workbooks"
             emptyText="You don't have any workbooks yet."
             workbooks={owned}
+            onMembers={setMembersOf}
             onDelete={setPendingDelete}
           />
           <WorkbookSection
             title="Shared with me"
             emptyText="Nothing has been shared with you yet."
             workbooks={shared}
+            onMembers={setMembersOf}
           />
         </>
       )}
+
+      {membersOf && <MembersDialog workbook={membersOf} onClose={() => setMembersOf(null)} />}
 
       {pendingDelete && (
         <DeleteWorkbookDialog workbook={pendingDelete} onClose={() => setPendingDelete(null)} />
@@ -96,10 +102,17 @@ interface WorkbookSectionProps {
   title: string;
   emptyText: string;
   workbooks: WorkbookSummary[];
+  onMembers: (workbook: WorkbookSummary) => void;
   onDelete?: (workbook: WorkbookSummary) => void;
 }
 
-function WorkbookSection({ title, emptyText, workbooks, onDelete }: WorkbookSectionProps) {
+function WorkbookSection({
+  title,
+  emptyText,
+  workbooks,
+  onMembers,
+  onDelete,
+}: WorkbookSectionProps) {
   return (
     <section aria-label={title}>
       <h2>{title}</h2>
@@ -111,6 +124,13 @@ function WorkbookSection({ title, emptyText, workbooks, onDelete }: WorkbookSect
             <li key={workbook.id}>
               <Link to={`/workbooks/${workbook.id}`}>{workbook.name}</Link>
               {workbook.role !== "owner" && <span> ({workbook.role})</span>}
+              <button
+                type="button"
+                aria-label={`Members of ${workbook.name}`}
+                onClick={() => onMembers(workbook)}
+              >
+                Members
+              </button>
               {onDelete && workbook.role === "owner" && (
                 <button
                   type="button"
