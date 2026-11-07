@@ -47,6 +47,10 @@ export function mountCollab(app: FastifyInstance, extensions: Extension[] = []):
   const hocuspocus = new Hocuspocus<CollabContext>({
     quiet: true,
     extensions,
+    // Store at most every 2s while edits arrive, and at least every 10s
+    // during continuous editing; the last disconnect stores immediately.
+    debounce: 2_000,
+    maxDebounce: 10_000,
     async onAuthenticate({ requestHeaders, documentName, connectionConfig }) {
       try {
         const decision = await authorizeCollabConnection(
