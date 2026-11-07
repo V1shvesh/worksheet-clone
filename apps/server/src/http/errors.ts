@@ -7,6 +7,10 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   INVALID_CREDENTIALS: 401,
   UNAUTHORIZED: 401,
   NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  USER_NOT_FOUND: 404,
+  ALREADY_MEMBER: 409,
+  INVALID_MEMBER_OPERATION: 409,
 };
 
 export function sendApiError(reply: FastifyReply, code: ApiErrorCode, message: string): void {

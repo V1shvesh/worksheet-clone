@@ -4,6 +4,10 @@ export const apiErrorCodes = [
   "INVALID_CREDENTIALS",
   "UNAUTHORIZED",
   "NOT_FOUND",
+  "FORBIDDEN",
+  "USER_NOT_FOUND",
+  "ALREADY_MEMBER",
+  "INVALID_MEMBER_OPERATION",
 ] as const;
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number];
