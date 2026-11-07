@@ -135,8 +135,8 @@ Never bypass hooks with `--no-verify`. A change is done only when the relevant t
 - [~] M0 — Walking skeleton (repo, tooling, CI, Docker, deployed hello-world) — built and verified locally; not yet deployed (see status narrative)
 - [x] M1 — Auth
 - [x] M2 — Workbooks + ACL
-- [ ] M3 — Realtime document backbone ← **next**
-- [ ] M4a — Grid port + view model + formula engine (no AG Grid)
+- [x] M3 — Realtime document backbone
+- [ ] M4a — Grid port + view model + formula engine (no AG Grid) ← **next**
 - [ ] M4b — AG Grid Community adapter + selection/keyboard/editor
 - [ ] M5 — Sheet tabs
 - [ ] M6 — Formatting, formula bar, undo/redo, clipboard, fill handle
