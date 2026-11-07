@@ -1,42 +1,49 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { ApiErrorBody, AuthUser, LoginInput, SignupInput } from "@worksheet-clone/shared";
+import type { AuthUser, LoginInput, SignupInput } from "@worksheet-clone/shared";
+import { api } from "../../app/api";
 
-export const authApi = createApi({
-  reducerPath: "authApi",
-  baseQuery: fetchBaseQuery({ baseUrl: "/api/auth", credentials: "include" }),
+type AuthResponse = { user: AuthUser };
+
+export const authApi = api.injectEndpoints({
   endpoints: (builder) => ({
-    signup: builder.mutation<{ user: AuthUser }, SignupInput>({
-      query: (body) => ({ url: "/signup", method: "POST", body }),
+    me: builder.query<AuthResponse, void>({
+      query: () => "/auth/me",
     }),
-    login: builder.mutation<{ user: AuthUser }, LoginInput>({
-      query: (body) => ({ url: "/login", method: "POST", body }),
+    signup: builder.mutation<AuthResponse, SignupInput>({
+      query: (body) => ({ url: "/auth/signup", method: "POST", body }),
+      onQueryStarted: (_arg, { dispatch, queryFulfilled }) =>
+        startSession(dispatch, queryFulfilled),
+    }),
+    login: builder.mutation<AuthResponse, LoginInput>({
+      query: (body) => ({ url: "/auth/login", method: "POST", body }),
+      onQueryStarted: (_arg, { dispatch, queryFulfilled }) =>
+        startSession(dispatch, queryFulfilled),
     }),
     logout: builder.mutation<{ ok: true }, void>({
-      query: () => ({ url: "/logout", method: "POST" }),
-    }),
-    me: builder.query<{ user: AuthUser }, void>({
-      query: () => "/me",
+      query: () => ({ url: "/auth/logout", method: "POST" }),
+      // Dropping every cached response (including /me) sends RequireAuth back
+      // to the server, which now says 401 and redirects to /login — and the
+      // next user can never see this user's cached workbooks.
+      onQueryStarted: async (_arg, { dispatch, queryFulfilled }) => {
+        await queryFulfilled;
+        dispatch(api.util.resetApiState());
+      },
     }),
   }),
 });
 
-export const { useSignupMutation, useLoginMutation, useLogoutMutation, useMeQuery } = authApi;
-
-export function isApiErrorBody(data: unknown): data is ApiErrorBody {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "error" in data &&
-    typeof (data as ApiErrorBody).error?.message === "string"
-  );
-}
-
-export function getAuthErrorMessage(error: unknown): string {
-  if (error && typeof error === "object" && "data" in error) {
-    const data = (error as { data?: unknown }).data;
-    if (isApiErrorBody(data)) {
-      return data.error.message;
-    }
+// A previous visit may have cached /me as a 401; replace the whole cache with
+// the freshly signed-in user so RequireAuth doesn't bounce back to /login.
+async function startSession(
+  dispatch: (action: unknown) => unknown,
+  queryFulfilled: Promise<{ data: AuthResponse }>,
+): Promise<void> {
+  try {
+    const { data } = await queryFulfilled;
+    dispatch(api.util.resetApiState());
+    dispatch(authApi.util.upsertQueryData("me", undefined, data));
+  } catch {
+    // The page shows the error from the mutation result itself.
   }
-  return "Something went wrong. Please try again.";
 }
+
+export const { useMeQuery, useSignupMutation, useLoginMutation, useLogoutMutation } = authApi;

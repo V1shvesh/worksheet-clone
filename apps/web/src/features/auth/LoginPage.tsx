@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getAuthErrorMessage, useLoginMutation } from "./authApi";
+import { getApiErrorMessage } from "../../app/apiErrors";
+import { useLoginMutation } from "./authApi";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -16,7 +17,7 @@ export function LoginPage() {
       await login({ email, password }).unwrap();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(getAuthErrorMessage(err));
+      setError(getApiErrorMessage(err));
     }
   }
 

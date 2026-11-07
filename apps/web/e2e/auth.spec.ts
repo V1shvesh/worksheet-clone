@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { mockSession } from "./fixtures/session";
 
 test.describe("auth", () => {
   test("redirects an unauthenticated visitor from / to /login", async ({ page }) => {
@@ -86,6 +87,32 @@ test.describe("auth", () => {
     await page.getByRole("button", { name: "Log in" }).click();
 
     await expect(page.getByRole("alert")).toHaveText("Invalid email or password");
+    await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
+test.describe("auth session transitions", () => {
+  test("logs in after being redirected to /login and reaches the home page", async ({ page }) => {
+    await mockSession(page, null);
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/login$/);
+    await page.getByLabel("Email").fill("returning@example.com");
+    await page.getByLabel("Password").fill("correct-password");
+    await page.getByRole("button", { name: "Log in" }).click();
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByText("Signed in as returning@example.com")).toBeVisible();
+  });
+
+  test("logging out returns to /login and stays there on reload", async ({ page }) => {
+    await mockSession(page, { id: "00000000-0000-4000-8000-000000000001", email: "u@example.com" });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Log out" }).click();
+
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goto("/");
     await expect(page).toHaveURL(/\/login$/);
   });
 });
