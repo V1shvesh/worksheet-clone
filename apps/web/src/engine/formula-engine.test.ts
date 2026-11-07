@@ -2,44 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import {
   addSheet,
-  createEmptyWorkbook,
-  encodeFormula,
   getRowOrderArray,
   getSheetOrderArray,
   getSheetsMap,
-  readColOrder,
-  readRowOrder,
-  readSheetOrder,
-  setCell,
-  type CellValue,
 } from "@worksheet-clone/shared";
 import { DetailedCellError } from "hyperformula";
+import { edit, newDoc, put } from "../test-utils/workbook";
 import { createFormulaEngine, type EngineEvent, type FormulaEngine } from "./formula-engine";
-
-function newDoc(): { doc: Y.Doc; sheetId: string } {
-  const doc = new Y.Doc();
-  createEmptyWorkbook(doc);
-  return { doc, sheetId: readSheetOrder(doc)[0]! };
-}
-
-type Input = { v: CellValue } | { f: string } | undefined;
-
-// Writes one cell without opening a transaction, so callers can group writes.
-function put(doc: Y.Doc, sheetId: string, row: number, col: number, input: Input): void {
-  const rows = readRowOrder(doc, sheetId);
-  const cols = readColOrder(doc, sheetId);
-  const data =
-    input && "f" in input
-      ? {
-          f: encodeFormula(input.f, { rowId: (i) => rows[i]!, colId: (j) => cols[j]! }),
-        }
-      : input;
-  setCell(doc, sheetId, rows[row]!, cols[col]!, data);
-}
-
-function edit(doc: Y.Doc, sheetId: string, row: number, col: number, input: Input): void {
-  doc.transact(() => put(doc, sheetId, row, col, input));
-}
 
 function errorOf(value: unknown): string {
   expect(value).toBeInstanceOf(DetailedCellError);

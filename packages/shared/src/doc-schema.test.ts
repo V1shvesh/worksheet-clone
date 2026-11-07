@@ -7,6 +7,9 @@ import {
   DEFAULT_ROW_COUNT,
   DEFAULT_SHEET_NAME,
   getCell,
+  getColWidthsMap,
+  getFormatsMap,
+  getRowHeightsMap,
   getColOrderArray,
   getRowOrderArray,
   getSchemaVersion,
@@ -225,5 +228,16 @@ describe("migrateWorkbook", () => {
     doc.on("afterTransaction", () => transactions++);
     migrateWorkbook(doc);
     expect(transactions).toBe(1);
+  });
+});
+
+describe("sheet size and format maps", () => {
+  it("are created empty with every sheet", () => {
+    const doc = new Y.Doc();
+    createEmptyWorkbook(doc);
+    const sheetId = readSheetOrder(doc)[0]!;
+    expect(getFormatsMap(doc, sheetId).size).toBe(0);
+    expect(getColWidthsMap(doc, sheetId).size).toBe(0);
+    expect(getRowHeightsMap(doc, sheetId).size).toBe(0);
   });
 });

@@ -153,6 +153,18 @@ export function getCellsMap(doc: Y.Doc, sheetId: string): Y.Map<CellData> {
   return nested<Y.Map<CellData>>(requireSheet(doc, sheetId), "cells");
 }
 
+export function getFormatsMap(doc: Y.Doc, sheetId: string): Y.Map<CellFormat> {
+  return nested<Y.Map<CellFormat>>(requireSheet(doc, sheetId), "formats");
+}
+
+export function getColWidthsMap(doc: Y.Doc, sheetId: string): Y.Map<number> {
+  return nested<Y.Map<number>>(requireSheet(doc, sheetId), "colWidths");
+}
+
+export function getRowHeightsMap(doc: Y.Doc, sheetId: string): Y.Map<number> {
+  return nested<Y.Map<number>>(requireSheet(doc, sheetId), "rowHeights");
+}
+
 export function getCell(
   doc: Y.Doc,
   sheetId: string,
