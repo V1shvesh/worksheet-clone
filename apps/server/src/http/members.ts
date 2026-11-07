@@ -6,6 +6,7 @@ import {
   workbookParamsSchema,
 } from "@worksheet-clone/shared";
 import { addMember, changeMemberRole, listMembers, removeMember } from "../domain/members.js";
+import { revokeUserAccess } from "../realtime/access.js";
 import { parseOrThrow } from "./errors.js";
 import { currentUser, requireUser } from "./session.js";
 
@@ -29,12 +30,15 @@ export function registerMemberRoutes(app: FastifyInstance): void {
     scope.patch("/api/workbooks/:id/members/:userId", async (request) => {
       const { id, userId } = parseOrThrow(memberParamsSchema, request.params, "NOT_FOUND");
       const { role } = parseOrThrow(changeRoleSchema, request.body);
-      return { member: await changeMemberRole(currentUser(request).id, id, userId, role) };
+      const member = await changeMemberRole(currentUser(request).id, id, userId, role);
+      revokeUserAccess(app.collab, id, userId);
+      return { member };
     });
 
     scope.delete("/api/workbooks/:id/members/:userId", async (request, reply) => {
       const { id, userId } = parseOrThrow(memberParamsSchema, request.params, "NOT_FOUND");
       await removeMember(currentUser(request).id, id, userId);
+      revokeUserAccess(app.collab, id, userId);
       return reply.code(204).send();
     });
   });

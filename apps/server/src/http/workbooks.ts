@@ -13,6 +13,7 @@ import {
   renameWorkbook,
   type WorkbookWithRole,
 } from "../domain/workbooks.js";
+import { revokeAllAccess } from "../realtime/access.js";
 import { parseOrThrow } from "./errors.js";
 import { currentUser, requireUser } from "./session.js";
 
@@ -58,6 +59,7 @@ export function registerWorkbookRoutes(app: FastifyInstance): void {
     scope.delete("/api/workbooks/:id", async (request, reply) => {
       const { id } = parseOrThrow(workbookParamsSchema, request.params, "NOT_FOUND");
       await deleteWorkbook(currentUser(request).id, id);
+      revokeAllAccess(app.collab, id);
       return reply.code(204).send();
     });
   });
