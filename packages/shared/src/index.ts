@@ -30,3 +30,4 @@ export {
   changeRoleSchema,
   type ChangeRoleInput,
 } from "./workbooks.js";
+export * from "./doc-schema.js";
