@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { registerAuthRoutes } from "./http/auth.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
+import { registerMemberRoutes } from "./http/members.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
 
@@ -24,6 +25,7 @@ export function buildApp(): FastifyInstance {
   registerHealthRoute(app);
   registerAuthRoutes(app);
   registerWorkbookRoutes(app);
+  registerMemberRoutes(app);
 
   const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
   if (serveSpa) {
