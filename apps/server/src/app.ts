@@ -8,6 +8,7 @@ import { registerHealthRoute } from "./http/health.js";
 import { registerMemberRoutes } from "./http/members.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
+import { mountCollab } from "./realtime/collab.js";
 
 // In the monorepo (and the pre-pack Docker build stage), apps/web/dist sits
 // two levels up from this file. The final Docker runtime stage copies that
@@ -26,6 +27,7 @@ export function buildApp(): FastifyInstance {
   registerAuthRoutes(app);
   registerWorkbookRoutes(app);
   registerMemberRoutes(app);
+  mountCollab(app);
 
   const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
   if (serveSpa) {
