@@ -3,13 +3,19 @@ import * as Y from "yjs";
 import {
   addSheet,
   createEmptyWorkbook,
+  DEFAULT_COL_COUNT,
+  DEFAULT_ROW_COUNT,
   DEFAULT_SHEET_NAME,
   getCell,
+  getColOrderArray,
   getRowOrderArray,
   getSchemaVersion,
   getSheetName,
   getSheetOrderArray,
+  getSheetsMap,
   isWorkbookInitialized,
+  migrateWorkbook,
+  readColOrder,
   readRowOrder,
   readSheetOrder,
   SCHEMA_VERSION,
@@ -107,6 +113,7 @@ describe("concurrent edits converge", () => {
 
   it("de-duplicates an id that a concurrent move left in the order twice", () => {
     const [a, b, sheetId] = forkedPair();
+    getRowOrderArray(a, sheetId).delete(0, DEFAULT_ROW_COUNT);
     getRowOrderArray(a, sheetId).push(["r1", "r2"]);
     sync(a, b);
 
@@ -129,5 +136,94 @@ describe("concurrent edits converge", () => {
     const [doc] = forkedPair();
     getSheetOrderArray(doc).push(["ghost"]);
     expect(readSheetOrder(doc)).toHaveLength(1);
+  });
+});
+
+describe("default grid ids", () => {
+  it("gives a new sheet 100 unique row ids and 26 unique col ids", () => {
+    const doc = new Y.Doc();
+    createEmptyWorkbook(doc);
+    const [sheetId = ""] = readSheetOrder(doc);
+    const rows = readRowOrder(doc, sheetId);
+    const cols = readColOrder(doc, sheetId);
+    expect(rows).toHaveLength(DEFAULT_ROW_COUNT);
+    expect(cols).toHaveLength(DEFAULT_COL_COUNT);
+    expect(new Set(rows).size).toBe(DEFAULT_ROW_COUNT);
+    expect(new Set(cols).size).toBe(DEFAULT_COL_COUNT);
+    expect(getSchemaVersion(doc)).toBe(2);
+  });
+
+  it("gives every added sheet its own ids", () => {
+    const doc = new Y.Doc();
+    createEmptyWorkbook(doc);
+    const added = addSheet(doc, "Two");
+    const [first = ""] = readSheetOrder(doc);
+    expect(readRowOrder(doc, added)).toHaveLength(DEFAULT_ROW_COUNT);
+    expect(readRowOrder(doc, added)).not.toEqual(readRowOrder(doc, first));
+  });
+});
+
+function v1Doc(): { doc: Y.Doc; sheetId: string } {
+  const doc = new Y.Doc();
+  createEmptyWorkbook(doc);
+  const [sheetId = ""] = readSheetOrder(doc);
+  doc.transact(() => {
+    getRowOrderArray(doc, sheetId).delete(0, DEFAULT_ROW_COUNT);
+    getColOrderArray(doc, sheetId).delete(0, DEFAULT_COL_COUNT);
+    getMetaV1(doc);
+  });
+  return { doc, sheetId };
+}
+function getMetaV1(doc: Y.Doc): void {
+  doc.getMap("meta").set("schemaVersion", 1);
+}
+
+describe("migrateWorkbook", () => {
+  it("fills empty orders, sets version 2 and reports a change", () => {
+    const { doc, sheetId } = v1Doc();
+    expect(migrateWorkbook(doc)).toBe(true);
+    expect(getSchemaVersion(doc)).toBe(2);
+    expect(readRowOrder(doc, sheetId)).toHaveLength(DEFAULT_ROW_COUNT);
+    expect(readColOrder(doc, sheetId)).toHaveLength(DEFAULT_COL_COUNT);
+  });
+
+  it("fills every sheet but never touches a non-empty order", () => {
+    const { doc, sheetId } = v1Doc();
+    getRowOrderArray(doc, sheetId).push(["keep1", "keep2"]);
+    const second = addSheet(doc, "Second");
+    doc.transact(() => {
+      getRowOrderArray(doc, second).delete(0, DEFAULT_ROW_COUNT);
+      getColOrderArray(doc, second).delete(0, DEFAULT_COL_COUNT);
+    });
+    expect(getSheetsMap(doc).size).toBe(2);
+
+    migrateWorkbook(doc);
+
+    expect(readRowOrder(doc, sheetId)).toEqual(["keep1", "keep2"]);
+    expect(readColOrder(doc, sheetId)).toHaveLength(DEFAULT_COL_COUNT);
+    expect(readRowOrder(doc, second)).toHaveLength(DEFAULT_ROW_COUNT);
+  });
+
+  it("is idempotent", () => {
+    const { doc, sheetId } = v1Doc();
+    migrateWorkbook(doc);
+    const rows = readRowOrder(doc, sheetId);
+    expect(migrateWorkbook(doc)).toBe(false);
+    expect(readRowOrder(doc, sheetId)).toEqual(rows);
+  });
+
+  it("does nothing to an uninitialized or current doc", () => {
+    expect(migrateWorkbook(new Y.Doc())).toBe(false);
+    const doc = new Y.Doc();
+    createEmptyWorkbook(doc);
+    expect(migrateWorkbook(doc)).toBe(false);
+  });
+
+  it("runs in a single transaction", () => {
+    const { doc } = v1Doc();
+    let transactions = 0;
+    doc.on("afterTransaction", () => transactions++);
+    migrateWorkbook(doc);
+    expect(transactions).toBe(1);
   });
 });

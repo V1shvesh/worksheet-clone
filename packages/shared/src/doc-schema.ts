@@ -7,7 +7,12 @@ import * as Y from "yjs";
 // so callers can group several writes into the one doc.transact a user
 // action requires.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+// Ids for the default grid are created up front: creating them on first
+// write lets two clients typing into row 5 of a fresh sheet each append their
+// own ids, and Yjs keeps both appends.
+export const DEFAULT_ROW_COUNT = 100;
+export const DEFAULT_COL_COUNT = 26;
 export const DEFAULT_SHEET_NAME = "Sheet1";
 
 export type CellValue = string | number | boolean;
@@ -86,12 +91,16 @@ function nested<T>(sheet: SheetMap, key: string): T {
   return sheet.get(key) as T;
 }
 
+function newIds(count: number): string[] {
+  return Array.from({ length: count }, () => newId());
+}
+
 export function addSheet(doc: Y.Doc, name: string, sheetId: string = newId()): string {
   const sheet: SheetMap = new Y.Map();
   sheet.set("name", name);
   sheet.set("hidden", false);
-  sheet.set("rowOrder", new Y.Array<string>());
-  sheet.set("colOrder", new Y.Array<string>());
+  sheet.set("rowOrder", Y.Array.from(newIds(DEFAULT_ROW_COUNT)));
+  sheet.set("colOrder", Y.Array.from(newIds(DEFAULT_COL_COUNT)));
   sheet.set("cells", new Y.Map<CellData>());
   sheet.set("formats", new Y.Map<CellFormat>());
   sheet.set("colWidths", new Y.Map<number>());
@@ -168,4 +177,24 @@ export function setCell(
   } else {
     cells.set(key, data);
   }
+}
+
+/**
+ * Brings an initialized doc up to SCHEMA_VERSION in one transaction. Server
+ * only, and the caller must persist the result immediately: a migration that
+ * isn't stored could be redone with different ids and merge into duplicates.
+ */
+export function migrateWorkbook(doc: Y.Doc): boolean {
+  const version = getSchemaVersion(doc);
+  if (version === undefined || version >= SCHEMA_VERSION) return false;
+  doc.transact(() => {
+    for (const sheet of getSheetsMap(doc).values()) {
+      const rows = nested<Y.Array<string>>(sheet, "rowOrder");
+      const cols = nested<Y.Array<string>>(sheet, "colOrder");
+      if (rows.length === 0) rows.push(newIds(DEFAULT_ROW_COUNT));
+      if (cols.length === 0) cols.push(newIds(DEFAULT_COL_COUNT));
+    }
+    getMeta(doc).set("schemaVersion", SCHEMA_VERSION);
+  });
+  return true;
 }

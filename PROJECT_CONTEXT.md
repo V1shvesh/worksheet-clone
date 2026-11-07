@@ -121,6 +121,8 @@ doc.getMap('sheets')        → sheetId → Y.Map {
 
 **Why the workbook name is not in the doc (decided 2026-11-07):** the workbook list needs every name without loading every Y.Doc, so `workbooks.name` in Postgres is the single source of truth. Renames go through `PATCH /api/workbooks/:id` (owner only); keeping a second copy in `meta` would need syncing and could drift.
 
+**Default grid ids:** the server creates the default 100×26 row/column ids when a sheet is created (`schemaVersion` 2; older docs are migrated on load). Creating ids lazily on first write would let two clients typing into the same fresh row each append their own ids, and Yjs keeps both, shifting a user's cell to another row for everyone. Cells stay sparse; growing past the default is an explicit insert (M7).
+
 **Why stable row/col ids:** with positional keys (`A1`), a user inserting a row while another edits `A5` would make the edit land in the wrong cell after merge. With ids, structure ops (insert/delete/reorder) only touch `rowOrder`/`colOrder`, and cell edits merge cleanly.
 
 **Why id-based formula refs:** `=A1+B2` stored as text breaks under concurrent structure changes. Formulas are stored as e.g. `=[[r:k3f,c:9az]]+[[r:p02,c:x1m]]` and translated to A1 for the formula bar and for HyperFormula. A deleted referent becomes `#REF!`, as in Excel.

@@ -60,7 +60,7 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 
 - `adapters/ag-grid`: render-only config (readOnlyEdit, keyboard suppressed, pinned row-index column, A/B/C headers, targeted `refreshCells`); passes the contract suite in Playwright component tests
 - Cell renderer emits `role="gridcell"` + `data-row`/`data-col`; `GridPage` page object for e2e
-- Default sheet size (e.g. 100×26) materialized lazily (ids created on first write to keep docs small)
+- Default sheet size 100×26: row/col ids are created up front by the server (lazy creation on first write corrupts row positions under concurrent first writes); growing past it is an explicit insert (M7)
 - `interaction/`: selection model (single cell + range via drag and Shift+arrows, stored as ids in Redux), keyboard map (arrows, Enter, Tab, Esc, F2, Delete)
 - `overlay/`: selection rectangle aligned via `getCellRect` + scroll events; floating cell editor (raw input/formula)
   **Done when:** `=SUM(A1:A3)` updates live when a collaborator changes A2, and a range can be selected and cleared in one undoable step.
