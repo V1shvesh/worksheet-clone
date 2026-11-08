@@ -1,6 +1,7 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
+import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import type { AppDispatch, RootState } from "../app/store";
 import { handleCollabNotice } from "./handleCollabNotice";
@@ -27,6 +28,8 @@ interface WorkbookDocValue {
    * server. Used after access dropped while local changes were unconfirmed. Absent in tests.
    */
   resetDoc?: () => Promise<void>;
+  /** The provider's presence channel (absent in tests that don't need it). */
+  awareness?: Awareness | null;
 }
 
 export const WorkbookDocContext = createContext<WorkbookDocValue | null>(null);
@@ -48,7 +51,11 @@ export function WorkbookDocProvider({
 }) {
   const dispatch = useDispatch<AppDispatch>();
   const store = useStore<RootState>();
-  const [open, setOpen] = useState<{ doc: Y.Doc; undo: WorkbookUndo } | null>(null);
+  const [open, setOpen] = useState<{
+    doc: Y.Doc;
+    undo: WorkbookUndo;
+    awareness: Awareness | null;
+  } | null>(null);
   // Bumped by resetDoc: the effect below re-runs and builds a brand-new doc and provider.
   const [epoch, setEpoch] = useState(0);
   const resetRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -142,7 +149,7 @@ export function WorkbookDocProvider({
     const onDocUpdate = (_update: Uint8Array, origin: unknown) =>
       tracker.noteUpdate(origin, provider);
     ydoc.on("update", onDocUpdate);
-    setOpen({ doc: ydoc, undo });
+    setOpen({ doc: ydoc, undo, awareness: provider.awareness });
 
     let disposed = false;
     const disposeConnection = async () => {
@@ -181,6 +188,7 @@ export function WorkbookDocProvider({
       value={{
         doc: open.doc,
         undo: open.undo,
+        awareness: open.awareness,
         readOnly: access !== "read-write",
         resetDoc: () => resetRef.current(),
       }}

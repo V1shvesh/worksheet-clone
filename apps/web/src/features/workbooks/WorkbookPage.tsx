@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../app/apiErrors";
 import { WorkbookDocProvider } from "../../crdt/WorkbookDoc";
+import { PresencePublisher } from "../../crdt/PresencePublisher";
 import { Toasts } from "../toasts/Toasts";
 import { SheetTabs } from "../sheets/SheetTabs";
 import { Toolbar } from "../toolbar/Toolbar";
@@ -24,6 +25,7 @@ export function WorkbookPage() {
           <WorkbookHeader workbook={workbook} />
           {/* Only connect once REST has confirmed membership. */}
           <WorkbookDocProvider workbookId={workbook.id}>
+            <PresencePublisher />
             <Toolbar />
             <AccessBanner workbookName={workbook.name} />
             <LiveGrid />
