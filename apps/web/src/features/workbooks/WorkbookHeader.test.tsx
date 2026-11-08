@@ -73,10 +73,11 @@ describe("WorkbookHeader", () => {
     );
   });
 
-  it("shows the access-denied alert", async () => {
+  it("shows 'Not connected' once access is denied (the access banner explains why)", async () => {
     const store = renderHeader(wb("editor"));
     store.dispatch(collabActions.accessChanged("denied"));
-    expect(await screen.findByRole("alert")).toHaveTextContent("don't have access");
+    expect(await screen.findByText("Not connected")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("owners rename inline: Enter commits the trimmed name", async () => {

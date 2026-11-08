@@ -69,9 +69,11 @@ test("a viewer is view-only and can't change the document", async ({ page }) => 
 
 test("a denied connection explains itself", async ({ page }) => {
   await openWorkbook(page, "denied");
-  await expect(page.getByRole("alert")).toHaveText(
-    "You don't have access to this workbook anymore.",
+  // REST still lists the workbook and no close reason was seen: the neutral wording.
+  await expect(page.getByTestId("access-banner")).toContainText(
+    "This workbook is no longer available to you",
   );
+  await expect(connection(page)).toHaveText("Not connected");
 });
 
 test("recovers after the connection drops", async ({ page }) => {

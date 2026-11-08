@@ -61,3 +61,22 @@ describe("ConnectionStatus", () => {
     expect(status()).toHaveTextContent("Reconnecting…");
   });
 });
+
+describe("ConnectionStatus for a viewer or a refused user", () => {
+  it("never shows 'Saving…' on a read-only connection whose dropped edits keep the counter at 1", () => {
+    const store = setup();
+    act(() => {
+      store.dispatch(collabActions.accessChanged("read-only"));
+      store.dispatch(collabActions.unsyncedChangesChanged(1));
+    });
+    act(() => void vi.advanceTimersByTime(SAVING_DELAY_MS + 10));
+    expect(status()).toHaveTextContent("All changes saved · View only");
+  });
+
+  it("says 'Not connected' (the banner explains why) once access is denied", () => {
+    const store = setup();
+    act(() => void store.dispatch(collabActions.accessChanged("denied")));
+    expect(status()).toHaveTextContent("Not connected");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});

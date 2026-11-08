@@ -25,7 +25,12 @@ export function LocationProbe() {
  */
 export function renderWithWorkbook(
   ui: ReactElement,
-  options: { doc: Y.Doc; readOnly?: boolean; route?: string },
+  options: {
+    doc: Y.Doc;
+    readOnly?: boolean;
+    route?: string;
+    resetDoc?: () => Promise<void>;
+  },
 ): RenderResult & {
   store: ReturnType<typeof createStore>;
   undo: ReturnType<typeof createWorkbookUndo>;
@@ -39,7 +44,14 @@ export function renderWithWorkbook(
   });
   const tree = (readOnly: boolean) => (
     <Provider store={store}>
-      <WorkbookDocContext.Provider value={{ doc: options.doc, readOnly, undo }}>
+      <WorkbookDocContext.Provider
+        value={{
+          doc: options.doc,
+          readOnly,
+          undo,
+          ...(options.resetDoc ? { resetDoc: options.resetDoc } : {}),
+        }}
+      >
         <MemoryRouter
           initialEntries={[options.route ?? "/workbooks/w1"]}
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}

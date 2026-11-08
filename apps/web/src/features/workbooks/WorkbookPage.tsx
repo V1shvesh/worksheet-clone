@@ -4,6 +4,7 @@ import { WorkbookDocProvider } from "../../crdt/WorkbookDoc";
 import { Toasts } from "../toasts/Toasts";
 import { SheetTabs } from "../sheets/SheetTabs";
 import { Toolbar } from "../toolbar/Toolbar";
+import { AccessBanner } from "./AccessBanner";
 import { LiveGrid } from "./LiveGrid";
 import { WorkbookHeader } from "./WorkbookHeader";
 import { useGetWorkbookQuery } from "./workbooksApi";
@@ -16,13 +17,15 @@ export function WorkbookPage() {
   return (
     <main className="workbook-page">
       {isLoading && <p>Loading…</p>}
-      {isError && <p role="alert">{getApiErrorMessage(error)}</p>}
+      {/* A later failed refresh (the access check after a refused socket) must not replace the page. */}
+      {isError && !workbook && <p role="alert">{getApiErrorMessage(error)}</p>}
       {workbook && (
         <>
           <WorkbookHeader workbook={workbook} />
           {/* Only connect once REST has confirmed membership. */}
           <WorkbookDocProvider workbookId={workbook.id}>
             <Toolbar />
+            <AccessBanner workbookName={workbook.name} />
             <LiveGrid />
             <SheetTabs />
             <Toasts />

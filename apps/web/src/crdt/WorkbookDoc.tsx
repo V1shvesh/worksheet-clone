@@ -2,11 +2,18 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import * as Y from "yjs";
-import type { RootState } from "../app/store";
+import type { AppDispatch, RootState } from "../app/store";
 import { handleCollabNotice } from "./handleCollabNotice";
 import { authApi } from "../features/auth/authApi";
+import { workbooksApi } from "../features/workbooks/workbooksApi";
+import {
+  confirmDeniedKind,
+  deniedKindFromCloseReason,
+  DirtyTracker,
+  type WorkbookLookup,
+} from "./accessLoss";
 import { collabActions } from "./collabSlice";
-import { openOfflineCache } from "./offlineCache";
+import { clearWorkbookCache, openOfflineCache } from "./offlineCache";
 import { captureUndoContext, createWorkbookUndo, type WorkbookUndo } from "./undo";
 
 interface WorkbookDocValue {
@@ -15,6 +22,11 @@ interface WorkbookDocValue {
   readOnly: boolean;
   /** This user's undo history for the doc (absent only in tests that don't need it). */
   undo?: WorkbookUndo;
+  /**
+   * Throws this replica away (doc, provider, on-device copy) and mounts a fresh one from the
+   * server. Used after access dropped while local changes were unconfirmed. Absent in tests.
+   */
+  resetDoc?: () => Promise<void>;
 }
 
 export const WorkbookDocContext = createContext<WorkbookDocValue | null>(null);
@@ -34,9 +46,12 @@ export function WorkbookDocProvider({
   workbookId: string;
   children: ReactNode;
 }) {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const store = useStore<RootState>();
   const [open, setOpen] = useState<{ doc: Y.Doc; undo: WorkbookUndo } | null>(null);
+  // Bumped by resetDoc: the effect below re-runs and builds a brand-new doc and provider.
+  const [epoch, setEpoch] = useState(0);
+  const resetRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const access = useSelector((state: RootState) => state.collab.access);
   // The undo manager reads access when you press undo, not when it was created.
   const readOnlyRef = useRef(true);
@@ -60,6 +75,14 @@ export function WorkbookDocProvider({
     // the provider forwards it to the server like any other local change.
     const userId = authApi.endpoints.me.select()(store.getState()).data?.user.id;
     const cache = userId ? openOfflineCache(ydoc, userId, workbookId) : null;
+    const tracker = new DirtyTracker();
+    let lastCloseReason: string | undefined;
+    // Stops persisting and wipes the on-device copy: used when the user may no longer keep this
+    // workbook (removed, deleted) or when its unsent edits must not come back after a reload.
+    const wipeCache = async () => {
+      await cache?.destroy();
+      if (userId) await clearWorkbookCache(userId, workbookId);
+    };
     let unmounted = false;
     void cache?.whenLoaded.then(() => {
       if (!unmounted) dispatch(collabActions.cacheLoaded());
@@ -71,10 +94,43 @@ export function WorkbookDocProvider({
       document: ydoc,
       onStatus: ({ status }) => dispatch(collabActions.statusChanged(status)),
       onSynced: ({ state }) => dispatch(collabActions.syncedChanged(state)),
-      onUnsyncedChanges: ({ number }) => dispatch(collabActions.unsyncedChangesChanged(number)),
-      onAuthenticated: ({ scope }) =>
-        dispatch(collabActions.accessChanged(scope === "read-write" ? "read-write" : "read-only")),
-      onAuthenticationFailed: () => dispatch(collabActions.accessChanged("denied")),
+      onUnsyncedChanges: ({ number }) => {
+        dispatch(collabActions.unsyncedChangesChanged(number));
+        tracker.noteUnsynced(number);
+        // The server confirmed everything after all (the acknowledgement was just late).
+        const loss = store.getState().collab.accessLoss;
+        if (loss?.kind === "downgraded" && loss.unsaved && !tracker.unsaved) {
+          dispatch(collabActions.accessLost({ kind: "downgraded", unsaved: false }));
+        }
+      },
+      onClose: ({ event }) => {
+        lastCloseReason = event?.reason;
+      },
+      onAuthenticated: ({ scope }) => {
+        const next = scope === "read-write" ? "read-write" : "read-only";
+        const wasEditor = store.getState().collab.access === "read-write";
+        if (next === "read-write") {
+          dispatch(collabActions.accessLossCleared());
+        } else if (wasEditor) {
+          // Downgraded mid-session. A viewer cannot write, so a replica that held only confirmed
+          // changes equals the server and needs no reset. Unconfirmed ones will be dropped by the
+          // server and would linger here forever: offer them, and stop the cache from reviving them.
+          dispatch(collabActions.accessLost({ kind: "downgraded", unsaved: tracker.unsaved }));
+          if (tracker.unsaved) void wipeCache();
+        }
+        dispatch(collabActions.accessChanged(next));
+      },
+      onAuthenticationFailed: () => {
+        dispatch(collabActions.accessChanged("denied"));
+        const guess = deniedKindFromCloseReason(lastCloseReason);
+        const unsaved = tracker.unsaved;
+        dispatch(collabActions.accessLost({ kind: guess, unsaved }));
+        void wipeCache();
+        void lookUpWorkbook(dispatch, workbookId).then((lookup) => {
+          const kind = confirmDeniedKind(guess, lookup);
+          if (!unmounted && kind !== guess) dispatch(collabActions.accessLost({ kind, unsaved }));
+        });
+      },
       onStateless: ({ payload }) =>
         handleCollabNotice(payload, {
           workbookId,
@@ -82,27 +138,52 @@ export function WorkbookDocProvider({
           currentUserId: () => authApi.endpoints.me.select()(store.getState()).data?.user.id,
         }),
     });
+    // Anything that did not come from the server (typing, the on-device copy) is unconfirmed.
+    const onDocUpdate = (_update: Uint8Array, origin: unknown) =>
+      tracker.noteUpdate(origin, provider);
+    ydoc.on("update", onDocUpdate);
     setOpen({ doc: ydoc, undo });
 
+    let disposed = false;
+    const disposeConnection = async () => {
+      if (disposed) return;
+      disposed = true;
+      provider.destroy();
+      await cache?.destroy();
+    };
+    let resetting = false;
+    resetRef.current = async () => {
+      if (resetting) return;
+      resetting = true;
+      await disposeConnection();
+      await wipeCache();
+      setEpoch((n) => n + 1);
+    };
+
     return () => {
+      ydoc.off("update", onDocUpdate);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       unmounted = true;
-      provider.destroy();
-      void cache?.destroy();
+      void disposeConnection();
       undo.destroy();
       ydoc.destroy();
       setOpen(null);
       dispatch(collabActions.closed());
     };
-  }, [workbookId, dispatch, store]);
+  }, [workbookId, epoch, dispatch, store]);
 
   if (!open) {
     return null;
   }
   return (
     <WorkbookDocContext.Provider
-      value={{ doc: open.doc, undo: open.undo, readOnly: access !== "read-write" }}
+      value={{
+        doc: open.doc,
+        undo: open.undo,
+        readOnly: access !== "read-write",
+        resetDoc: () => resetRef.current(),
+      }}
     >
       {children}
     </WorkbookDocContext.Provider>
@@ -115,4 +196,16 @@ export function useWorkbookDoc(): WorkbookDocValue {
     throw new Error("useWorkbookDoc must be used inside <WorkbookDocProvider>");
   }
   return value;
+}
+
+/** Asks REST whether the workbook is still readable by this user (a plain read, no page query touched). */
+async function lookUpWorkbook(dispatch: AppDispatch, workbookId: string): Promise<WorkbookLookup> {
+  const result = await dispatch(
+    workbooksApi.endpoints.getWorkbook.initiate(workbookId, {
+      forceRefetch: true,
+      subscribe: false,
+    }),
+  );
+  if (!result.isError) return "found";
+  return (result.error as { status?: unknown } | undefined)?.status === 404 ? "missing" : "failed";
 }

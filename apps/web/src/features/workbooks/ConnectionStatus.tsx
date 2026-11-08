@@ -32,12 +32,24 @@ function useDisplayedStatus(status: SyncStatus): SyncStatus {
 /** The sync indicator (saved / saving / offline / …), plus "View only" and the access-denied alert. */
 export function ConnectionStatus() {
   const collab = useSelector((state: RootState) => state.collab);
-  const displayed = useDisplayedStatus(syncStatus(collab));
+  // A read-only connection has nothing it could still save: its counter may stay above 0 when the
+  // server dropped our edits, and the access banner already says so.
+  const pending = collab.access === "read-only" ? 0 : collab.unsyncedChanges;
+  const displayed = useDisplayedStatus(syncStatus({ ...collab, unsyncedChanges: pending }));
 
   if (collab.access === "denied") {
-    return <p role="alert">You don't have access to this workbook anymore.</p>;
+    // Why is the access banner's job (it knows deleted from removed).
+    return (
+      <p
+        role="status"
+        aria-label="Connection"
+        className="workbook-header-connection"
+        data-sync-status="denied"
+      >
+        Not connected
+      </p>
+    );
   }
-  const pending = collab.unsyncedChanges;
   const title =
     displayed === "offline" && pending > 0
       ? `${pending} change${pending === 1 ? "" : "s"} waiting to sync`

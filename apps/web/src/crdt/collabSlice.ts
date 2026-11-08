@@ -19,6 +19,17 @@ export interface CollabState {
   online: boolean;
   /** The server told us it can't persist (set by the notice handler). */
   saveFailing: boolean;
+  /** Set once access dropped mid-session (see AccessLoss); null while all is well. */
+  accessLoss: AccessLoss | null;
+}
+
+/**
+ * Why editing stopped for good (until reload): the banner above the grid reads this.
+ * `unsaved`: local changes the server had not confirmed when access dropped.
+ */
+export interface AccessLoss {
+  kind: "downgraded" | "removed" | "deleted" | "unavailable";
+  unsaved: boolean;
 }
 
 export type SyncStatus =
@@ -53,6 +64,7 @@ const initialState: CollabState = {
   unsyncedChanges: 0,
   online: true,
   saveFailing: false,
+  accessLoss: null,
 };
 
 // UI state about the live connection only — document content never goes in
@@ -93,6 +105,12 @@ export const collabSlice = createSlice({
     },
     accessChanged(state, action: PayloadAction<CollabAccess>) {
       state.access = action.payload;
+    },
+    accessLost(state, action: PayloadAction<AccessLoss>) {
+      state.accessLoss = action.payload;
+    },
+    accessLossCleared(state) {
+      state.accessLoss = null;
     },
     closed() {
       return initialState;

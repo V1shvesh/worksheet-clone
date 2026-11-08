@@ -33,3 +33,25 @@ body:has(.workbook-page) {
 .workbook-header p {
   margin: 0;
 }
+.access-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 4px 0;
+  padding: 8px 12px;
+  border: 1px solid #d4a72c;
+  border-radius: 4px;
+  background: #fff8c5;
+}
+.access-banner p {
+  margin: 0;
+}
+.access-banner-message {
+  font-weight: 600;
+}
+.access-banner-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
