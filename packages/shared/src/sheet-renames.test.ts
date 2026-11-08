@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import {
-  addSheet,
-  createEmptyWorkbook,
-  readSheetOrder,
-  setSheetName,
-} from "@worksheet-clone/shared";
-import { diffSheetNames, readSheetNames } from "./notices.js";
+import { addSheet, createEmptyWorkbook, readSheetOrder, setSheetName } from "./doc-schema.js";
+import { diffSheetNames, readSheetNames } from "./sheet-renames.js";
 
 describe("diffSheetNames", () => {
   it("reports renamed sheets only", () => {

@@ -1,39 +1,6 @@
 import type { Extension, Hocuspocus } from "@hocuspocus/server";
-import type * as Y from "yjs";
-import { getSheetName, readSheetOrder, type CollabNotice } from "@worksheet-clone/shared";
+import { diffSheetNames, readSheetNames, type CollabNotice } from "@worksheet-clone/shared";
 import type { CollabContext } from "./auth.js";
-
-/** sheetId -> name */
-export type SheetNames = ReadonlyMap<string, string>;
-
-export interface SheetRename {
-  sheetId: string;
-  from: string;
-  to: string;
-}
-
-export function readSheetNames(doc: Y.Doc): Map<string, string> {
-  const names = new Map<string, string>();
-  for (const sheetId of readSheetOrder(doc)) {
-    const name = getSheetName(doc, sheetId);
-    if (name !== undefined) {
-      names.set(sheetId, name);
-    }
-  }
-  return names;
-}
-
-/** Sheets present in both snapshots whose name differs. Additions and deletions are not renames. */
-export function diffSheetNames(before: SheetNames, after: SheetNames): SheetRename[] {
-  const renames: SheetRename[] = [];
-  for (const [sheetId, to] of after) {
-    const from = before.get(sheetId);
-    if (from !== undefined && from !== to) {
-      renames.push({ sheetId, from, to });
-    }
-  }
-  return renames;
-}
 
 function send(hocuspocus: Hocuspocus<CollabContext>, workbookId: string, notice: CollabNotice) {
   // Not loaded means nobody is connected: nobody to tell.
