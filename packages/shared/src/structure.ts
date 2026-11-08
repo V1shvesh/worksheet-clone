@@ -1,6 +1,7 @@
 import type * as Y from "yjs";
 import {
   getCellsMap,
+  getSheetsMap,
   getColOrderArray,
   getColWidthsMap,
   getFormatsMap,
@@ -10,6 +11,7 @@ import {
   readColOrder,
   readRowOrder,
 } from "./doc-schema.js";
+import { retargetDeleted } from "./formula-refs.js";
 
 // Row/column structure operations (M7). Like the other doc helpers, writers
 // here never open their own transaction: the caller wraps one user action in
@@ -95,17 +97,52 @@ function deleteEntries<T>(map: Y.Map<T>, axis: Axis, ids: ReadonlySet<string>): 
   }
 }
 
+/**
+ * Captures the pre-deletion order of every sheet and returns a function that
+ * rewrites all formulas of all sheets (cross-sheet ranges included) so ranges
+ * shrink Excel-style. Only cells whose text changes are written.
+ */
+function planRetarget(
+  doc: Y.Doc,
+  sheetId: string,
+  axis: Axis,
+  ids: ReadonlySet<string>,
+): () => void {
+  const orders = new Map<string, { rows: string[]; cols: string[] }>();
+  for (const id of getSheetsMap(doc).keys()) {
+    orders.set(id, { rows: readRowOrder(doc, id), cols: readColOrder(doc, id) });
+  }
+  const none: ReadonlyMap<string, ReadonlySet<string>> = new Map();
+  const deleted = new Map([[sheetId, ids]]);
+  const deletedRows = axis === "row" ? deleted : none;
+  const deletedCols = axis === "col" ? deleted : none;
+  return () => {
+    for (const id of getSheetsMap(doc).keys()) {
+      const cells = getCellsMap(doc, id);
+      const ctx = { sheetId: id, deletedRows, deletedCols, orderOf: (s: string) => orders.get(s) };
+      for (const [key, data] of [...cells.entries()]) {
+        if (data.f === undefined) continue;
+        const f = retargetDeleted(data.f, ctx);
+        if (f !== data.f) cells.set(key, { ...data, f });
+      }
+    }
+  };
+}
+
 function deleteIds(doc: Y.Doc, sheetId: string, axis: Axis, idList: string[]): boolean {
   const ids = new Set(idList);
   const visible = visibleOrder(doc, sheetId, axis);
   const present = visible.filter((id) => ids.has(id));
   if (present.length === 0) return false;
   if (visible.length - present.length < 1) return false;
+  // Formulas are rewritten against the pre-deletion order, so compute first.
+  const retarget = planRetarget(doc, sheetId, axis, ids);
   removeIds(rawOrder(doc, sheetId, axis), ids);
   deleteEntries(getCellsMap(doc, sheetId), axis, ids);
   deleteEntries(getFormatsMap(doc, sheetId), axis, ids);
   const sizes = axis === "row" ? getRowHeightsMap(doc, sheetId) : getColWidthsMap(doc, sheetId);
   for (const id of ids) sizes.delete(id);
+  retarget();
   return true;
 }
 

@@ -538,3 +538,110 @@ export function qualifyStoredFormula(stored: string, sheetId: string): string {
   }
   return out;
 }
+
+export interface RetargetContext {
+  /** The sheet the formula lives in; unqualified tokens refer to it. */
+  sheetId: string;
+  /** Row ids being deleted, per sheet. */
+  deletedRows: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Column ids being deleted, per sheet. */
+  deletedCols: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Row and column order of a sheet BEFORE the deletion; undefined for an unknown sheet. */
+  orderOf(sheetId: string): { rows: string[]; cols: string[] } | undefined;
+}
+
+type AxisRef = { abs: boolean; id: string };
+
+/** Outcome for one axis of a range: unchanged, new endpoint ids, or "dead" (nothing of the range survives). */
+function shrinkAxis(
+  a: AxisRef,
+  b: AxisRef,
+  order: readonly string[],
+  deleted: ReadonlySet<string> | undefined,
+): { a: AxisRef; b: AxisRef } | "dead" {
+  if (!deleted || (!deleted.has(a.id) && !deleted.has(b.id))) return { a, b };
+  const ia = order.indexOf(a.id);
+  const ib = order.indexOf(b.id);
+  if (ia === -1 || ib === -1) return { a, b };
+  const survivors = order
+    .slice(Math.min(ia, ib), Math.max(ia, ib) + 1)
+    .filter((id) => !deleted.has(id));
+  const first = survivors[0];
+  const last = survivors.at(-1);
+  if (first === undefined || last === undefined) return "dead";
+  const forward = ia <= ib;
+  return {
+    a: deleted.has(a.id) ? { abs: a.abs, id: forward ? first : last } : a,
+    b: deleted.has(b.id) ? { abs: b.abs, id: forward ? last : first } : b,
+  };
+}
+
+function writeToken(ref: ParsedIds, withSheet: boolean): string {
+  const parts: string[] = [];
+  if (withSheet && ref.sheet !== undefined) parts.push(`s:${ref.sheet}`);
+  if (ref.row) parts.push(`${ref.row.abs ? "$" : ""}r:${ref.row.id}`);
+  if (ref.col) parts.push(`${ref.col.abs ? "$" : ""}c:${ref.col.id}`);
+  return `[[${parts.join(",")}]]`;
+}
+
+/**
+ * Excel-style range shrink for a stored formula about to lose rows/columns:
+ * a range whose first or last row (column) is deleted has that endpoint moved
+ * to the nearest surviving row (column) inside the range, in the pre-deletion
+ * order; the `$` flag stays. A range with no survivor on an axis is left alone
+ * and decodes to #REF! afterwards. Single-cell refs are untouched (they turn
+ * into #REF! on their own), as are string literals.
+ */
+export function retargetDeleted(stored: string, ctx: RetargetContext): string {
+  let out = "";
+  let i = 0;
+  while (i < stored.length) {
+    const ch = stored[i] ?? "";
+    if (ch === '"' || ch === "'") {
+      const end = literalEnd(stored, i);
+      out += stored.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (ch === "[" && stored[i + 1] === "[") {
+      const first = readToken(stored, i);
+      if (first) {
+        const firstEnd = i + first.length;
+        const second = stored[firstEnd] === ":" ? readToken(stored, firstEnd + 1) : undefined;
+        const end = second ? firstEnd + 1 + second.length : firstEnd;
+        const original = stored.slice(i, end);
+        out += second ? (retargetRange(first.ref, second.ref, ctx) ?? original) : original;
+        i = end;
+        continue;
+      }
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+/** The rewritten range text, or undefined to keep the original. */
+function retargetRange(a: ParsedIds, b: ParsedIds, ctx: RetargetContext): string | undefined {
+  const sheetId = a.sheet ?? ctx.sheetId;
+  if (b.sheet !== undefined && b.sheet !== sheetId) return undefined;
+  if (Boolean(a.row) !== Boolean(b.row) || Boolean(a.col) !== Boolean(b.col)) return undefined;
+  const order = ctx.orderOf(sheetId);
+  if (!order) return undefined;
+  const rows =
+    a.row && b.row ? shrinkAxis(a.row, b.row, order.rows, ctx.deletedRows.get(sheetId)) : undefined;
+  const cols =
+    a.col && b.col ? shrinkAxis(a.col, b.col, order.cols, ctx.deletedCols.get(sheetId)) : undefined;
+  if (rows === "dead" || cols === "dead") return undefined;
+  const na: ParsedIds = {
+    ...a,
+    ...(rows ? { row: rows.a } : {}),
+    ...(cols ? { col: cols.a } : {}),
+  };
+  const nb: ParsedIds = {
+    ...b,
+    ...(rows ? { row: rows.b } : {}),
+    ...(cols ? { col: cols.b } : {}),
+  };
+  return `${writeToken(na, true)}:${writeToken(nb, true)}`;
+}
