@@ -141,7 +141,7 @@ Never bypass hooks with `--no-verify`. A change is done only when the relevant t
 - [x] M5 — Sheet tabs
 - [x] M6 — Formatting, formula bar, undo/redo, clipboard, fill handle
 - [x] M7 — Row/column structure ops (reorder deferred)
-- [ ] M8 — Resilience: errors, offline, rollback, presence ← **next**
-- [ ] M9 — Production hardening
+- [x] M8 — Resilience: errors, offline, rollback, presence
+- [ ] M9 — Production hardening ← **next**
 
 Update this list (and the narrative in `PROJECT_CONTEXT.md`) when a milestone completes.
