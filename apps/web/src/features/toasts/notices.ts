@@ -11,6 +11,8 @@ export function noticeToToast(
   notice: CollabNotice,
   currentUserId: string | undefined,
 ): NoticeToast | undefined {
+  // Save-state notices are not about a user; the sync indicator handles them.
+  if (notice.type === "saveFailing" || notice.type === "saveRecovered") return undefined;
   if (notice.by.userId === currentUserId) return undefined;
   const handle = `@${notice.by.email.split("@")[0] ?? notice.by.email}`;
   const message =

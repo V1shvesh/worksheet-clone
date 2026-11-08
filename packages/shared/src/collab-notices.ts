@@ -19,6 +19,10 @@ export const collabNoticeSchema = z.discriminatedUnion("type", [
     from: z.string(),
     to: z.string(),
   }),
+  // Server-wide state, not user actions, so no `by`: the server holds changes
+  // it could not write to the database yet / the database accepted them again.
+  z.object({ type: z.literal("saveFailing") }),
+  z.object({ type: z.literal("saveRecovered") }),
 ]);
 export type CollabNotice = z.infer<typeof collabNoticeSchema>;
 

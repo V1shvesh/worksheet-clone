@@ -33,6 +33,7 @@ export {
 export * from "./doc-schema.js";
 export * from "./sheets.js";
 export * from "./formula-refs.js";
+export * from "./collab-close-codes.js";
 export * from "./collab-notices.js";
 export * from "./sheet-renames.js";
 export * from "./structure.js";
