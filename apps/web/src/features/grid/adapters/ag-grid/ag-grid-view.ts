@@ -3,7 +3,6 @@ import {
   ClientSideRowModelApiModule,
   ClientSideRowModelModule,
   ColumnApiModule,
-  DragAndDropModule,
   createGrid,
   RenderApiModule,
   RowApiModule,
@@ -30,12 +29,11 @@ import type {
   Rect,
 } from "../../port/types";
 
-// Smallest module set that renders, scrolls, resizes and moves columns. Anything else
+// Smallest module set that renders, scrolls and resizes columns. Anything else
 // (editing, selection, clipboard, filtering, sorting...) is ours, not AG Grid's.
 const MODULES = [
   ClientSideRowModelApiModule,
   ClientSideRowModelModule,
-  DragAndDropModule,
   ColumnApiModule,
   RowApiModule,
   CellApiModule,
@@ -225,20 +223,13 @@ export class AgGridView implements GridView {
       readOnlyEdit: true,
       suppressCellFocus: true,
       suppressHeaderFocus: true,
-      suppressMovableColumns: false,
+      // Reordering is deferred (M7); a header drag must not even animate a move.
+      suppressMovableColumns: true,
       suppressDragLeaveHidesColumns: true,
       suppressRowHoverHighlight: true,
       suppressAnimationFrame: true,
       animateRows: false,
       onBodyScroll: () => this.emit("scroll", this.getVisibleRange()),
-      onColumnMoved: (e) => {
-        if (!e.finished || e.source !== "uiColumnMoved" || !e.column || e.toIndex == null) return;
-        const from = colFromId(e.column.getColId());
-        // toIndex counts the pinned row-header column.
-        const to = e.toIndex - 1;
-        this.restoreColumnOrder();
-        if (from !== to) this.emit("columnMoveRequested", from, to);
-      },
       onColumnResized: (e) => {
         if (!e.finished || e.source !== "uiColumnResized" || !e.column) return;
         const id = e.column.getColId();
@@ -469,7 +460,7 @@ export class AgGridView implements GridView {
       resizable: true,
       editable: false,
       sortable: false,
-      suppressMovable: false,
+      suppressMovable: true,
       valueGetter: (p) => getCell({ row: p.data!.i, col: j }),
       cellRenderer: CellPainter,
       headerComponent: ColumnHeaderPainter,
@@ -477,11 +468,6 @@ export class AgGridView implements GridView {
       suppressHeaderKeyboardEvent: () => true,
     }));
     return [rowHeader, ...cols];
-  }
-
-  private restoreColumnOrder(): void {
-    const ids = [ROW_HEADER_ID, ...Array.from({ length: this.dims!.colCount }, (_, j) => colId(j))];
-    this.api!.applyColumnState({ state: ids.map((id) => ({ colId: id })), applyOrder: true });
   }
 
   /** Left offsets (content coordinates) of every data column, from AG Grid's live widths. */

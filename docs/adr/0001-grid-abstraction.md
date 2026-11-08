@@ -112,7 +112,7 @@ export interface GridEvents {
 - `rowData` = array of visual row indices; `getRowId` = index; columns generated from `GridDimensions`. Values come from `getCell` via a `valueGetter`; one shared cell renderer paints `CellRenderData`.
 - `readOnlyEdit: true` and no AG Grid editors (`editable: false`); editing is our floating editor in `overlay/`.
 - `suppressKeyboardEvent` returns true for everything; keys are forwarded as `keyDown`.
-- Built-in column moving is allowed only to capture the gesture: on `columnMoved` the adapter emits `columnMoveRequested` and restores its column order; the order changes when the model re-sends dimensions.
+- Column moving is switched off (`suppressMovableColumns`); reordering is deferred, so `columnMoveRequested`/`rowMoveRequested` stay in the port but no adapter emits them yet. `columnResized` fires once, on release. AG Grid has no row resize: row heights are changed by an overlay handle that calls the controller directly, so `rowResized` is reserved too.
 - Row index column = pinned-left column painted from `GridDimensions`.
 - Updates use `api.refreshCells({ rowNodes, columns })` for targeted repaints.
 

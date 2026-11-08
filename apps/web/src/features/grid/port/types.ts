@@ -68,9 +68,19 @@ export interface GridEvents {
   contextMenu(target: CellCoord | HeaderHit, clientX: number, clientY: number): void;
   keyDown(e: KeyInfo): void; // adapter suppresses its own key handling
   scroll(visible: CellRange): void;
+  /** Emitted once, when the user releases a column-resize drag (never per pixel). */
   columnResized(col: number, width: number): void;
+  /**
+   * Reserved: AG Grid has no row-resize gesture, so no adapter emits this today. Row resizing is
+   * an overlay handle that calls the interaction controller directly (see `overlay/`).
+   */
   rowResized(row: number, height: number): void;
-  columnMoveRequested(from: number, to: number): void; // adapter reverts its own move; model decides
+  /**
+   * Reserved for reordering (deferred past M7): NOT emitted by any adapter today. AG Grid's
+   * column moving is switched off, so a header drag only selects columns.
+   */
+  columnMoveRequested(from: number, to: number): void;
+  /** Reserved, see `columnMoveRequested`. */
   rowMoveRequested(from: number, to: number): void;
 }
 

@@ -1,5 +1,4 @@
-// Adapter behavior the shared contract does not cover: gestures AG Grid owns (column move and
-// resize), the DOM attributes the future GridPage page object relies on, and key handling.
+// Adapter behavior the shared contract does not cover: gestures AG Grid owns (column resize), the DOM attributes the future GridPage page object relies on, and key handling.
 import { expect, test, type Page } from "@playwright/test";
 
 async function mountGrid(page: Page): Promise<void> {
@@ -38,21 +37,28 @@ test("renders text, error styling and formats", async ({ page }) => {
   );
 });
 
-test("dragging a column header emits columnMoveRequested and restores AG Grid's order", async ({
+test("dragging a column header emits nothing and leaves AG Grid's column order unchanged", async ({
   page,
 }) => {
   await mountGrid(page);
+  // AG Grid positions header cells with CSS, so DOM order proves nothing: compare x positions.
+  const lefts = () =>
+    page
+      .locator("#grid .ag-header-cell")
+      .evaluateAll((els) =>
+        els.map((e) => [e.getAttribute("col-id"), Math.round(e.getBoundingClientRect().left)]),
+      );
+  const before = await lefts();
   const header = (await page.locator('[data-col-header="1"]').boundingBox())!;
   await page.mouse.move(header.x + 20, header.y + 8);
   await page.mouse.down();
   await page.mouse.move(header.x + 100, header.y + 8, { steps: 5 });
   await page.mouse.move(header.x + 230, header.y + 8, { steps: 10 });
+  // Mid-drag nothing may have moved (no animated move that snaps back).
+  expect(await lefts()).toEqual(before);
   await page.mouse.up();
-  await expect.poll(() => recorded(page)).toEqual([["columnMoveRequested", 1, 3]]);
-  const order = await page
-    .locator("#grid .ag-header-cell")
-    .evaluateAll((els) => els.slice(0, 5).map((e) => e.getAttribute("col-id")));
-  expect(order).toEqual(["rowHeader", "c0", "c1", "c2", "c3"]);
+  expect(await recorded(page)).toEqual([]);
+  expect(await lefts()).toEqual(before);
 });
 
 test("the row-header column cannot be moved and resizing emits columnResized, never rowResized", async ({
