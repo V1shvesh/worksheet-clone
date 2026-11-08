@@ -258,8 +258,11 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       case "redo": {
         history?.[command.type]();
         view.focus();
+        // Scroll the ACTIVE cell (the anchor) into view, minimally, like Google Sheets. The
+        // focus corner is wrong here: for a whole-column selection it is the last row, so
+        // undoing a column action would jump the viewport to the bottom of the sheet.
         const restored = resolveSelection(store.getState().grid.selection, model);
-        if (restored) view.scrollIntoView(restored.focus);
+        if (restored) view.scrollIntoView(restored.anchor);
         break;
       }
     }
