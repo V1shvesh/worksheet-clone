@@ -6,6 +6,7 @@ import type { RootState } from "../app/store";
 import { handleCollabNotice } from "./handleCollabNotice";
 import { authApi } from "../features/auth/authApi";
 import { collabActions } from "./collabSlice";
+import { openOfflineCache } from "./offlineCache";
 import { captureUndoContext, createWorkbookUndo, type WorkbookUndo } from "./undo";
 
 interface WorkbookDocValue {
@@ -54,6 +55,16 @@ export function WorkbookDocProvider({
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
 
+    // The user comes from the /me cache: this provider only mounts after REST confirmed membership.
+    // The cache is applied with its own origin (not LOCAL_ORIGIN), so undo never records it, and
+    // the provider forwards it to the server like any other local change.
+    const userId = authApi.endpoints.me.select()(store.getState()).data?.user.id;
+    const cache = userId ? openOfflineCache(ydoc, userId, workbookId) : null;
+    let unmounted = false;
+    void cache?.whenLoaded.then(() => {
+      if (!unmounted) dispatch(collabActions.cacheLoaded());
+    });
+
     const provider = new HocuspocusProvider({
       url: collabUrl(window.location),
       name: workbookId,
@@ -76,7 +87,9 @@ export function WorkbookDocProvider({
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      unmounted = true;
       provider.destroy();
+      void cache?.destroy();
       undo.destroy();
       ydoc.destroy();
       setOpen(null);

@@ -9,6 +9,8 @@ export interface CollabState {
   status: ConnectionStatus;
   synced: boolean;
   access: CollabAccess;
+  /** The on-device copy has been applied to the doc (it may already hold content before the server sync). */
+  cacheLoaded: boolean;
   /** True once this mount has completed a server sync (so a later drop is "reconnecting", not "connecting"). */
   hasSynced: boolean;
   /** The provider's count of local updates the server hasn't acknowledged. */
@@ -46,6 +48,7 @@ const initialState: CollabState = {
   status: "disconnected",
   synced: false,
   access: "pending",
+  cacheLoaded: false,
   hasSynced: false,
   unsyncedChanges: 0,
   online: true,
@@ -70,6 +73,9 @@ export const collabSlice = createSlice({
     syncedChanged(state, action: PayloadAction<boolean>) {
       state.synced = action.payload;
       if (action.payload) state.hasSynced = true;
+    },
+    cacheLoaded(state) {
+      state.cacheLoaded = true;
     },
     unsyncedChangesChanged(state, action: PayloadAction<number>) {
       state.unsyncedChanges = action.payload;

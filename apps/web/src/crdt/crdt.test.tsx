@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import "fake-indexeddb/auto";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
@@ -156,6 +157,20 @@ describe("WorkbookDocProvider", () => {
     expect(store.getState().collab.online).toBe(false);
     act(() => void window.dispatchEvent(new Event("online")));
     expect(store.getState().collab.online).toBe(true);
+  });
+
+  it("keeps the doc in a per-user, per-workbook IndexedDB and reports when the cache is loaded", async () => {
+    const store = createStore();
+    await store.dispatch(
+      authApi.util.upsertQueryData("me", undefined, {
+        user: { id: "u-7", email: "a@b.c", createdAt: new Date().toISOString() },
+      } as never),
+    );
+    const { unmount } = renderWith("wb-9", store);
+    await waitFor(() => expect(store.getState().collab.cacheLoaded).toBe(true));
+    expect((await indexedDB.databases()).map((d) => d.name)).toContain("worksheet:u-7:wb-9");
+    unmount();
+    expect(store.getState().collab.cacheLoaded).toBe(false);
   });
 
   it("stays read-only until the server grants read-write", () => {

@@ -8,11 +8,12 @@ const WorkbookGrid = lazy(() =>
   import("../grid/WorkbookGrid").then((m) => ({ default: m.WorkbookGrid })),
 );
 
-/** The active sheet's grid (see useActiveSheet), once the document has synced (before that it has no sheets). */
+/** The active sheet's grid (see useActiveSheet), once the document has synced or its on-device copy has loaded (before either it has no sheets). */
 export function LiveGrid() {
-  const synced = useSelector((state: RootState) => state.collab.synced);
+  // Cached content (applied before the server answers) is shown too, read-only until access is granted.
+  const ready = useSelector((state: RootState) => state.collab.synced || state.collab.cacheLoaded);
   const { sheetId } = useActiveSheet();
-  if (!synced || !sheetId) return null;
+  if (!ready || !sheetId) return null;
   return (
     <div className="workbook-page-grid">
       <Suspense fallback={<p className="workbook-page-grid-loading">Loading grid…</p>}>
