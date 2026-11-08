@@ -15,9 +15,14 @@ export interface GridState {
   sheetId: string | null;
   selection: IdSelection | null;
   editing: EditingState | null;
+  /**
+   * A selection to apply when `sheetId` opens (undo/redo that switched sheets): the old
+   * sheet's grid closes and the new one mounts afterwards, and both reset the slice.
+   */
+  restore: { sheetId: string; selection: IdSelection } | null;
 }
 
-const initialState: GridState = { sheetId: null, selection: null, editing: null };
+const initialState: GridState = { sheetId: null, selection: null, editing: null, restore: null };
 
 // UI state for the open sheet only. Selection and the edited cell are ids, never
 // indices; cell content stays in the Y.Doc.
@@ -25,11 +30,21 @@ export const gridSlice = createSlice({
   name: "grid",
   initialState,
   reducers: {
-    sheetOpened(_state, action: PayloadAction<string>) {
-      return { ...initialState, sheetId: action.payload };
+    sheetOpened(state, action: PayloadAction<string>) {
+      const restore = state.restore;
+      const here = restore?.sheetId === action.payload ? restore : null;
+      return {
+        ...initialState,
+        sheetId: action.payload,
+        selection: here ? here.selection : null,
+        restore: here ? null : (restore ?? null),
+      };
     },
-    sheetClosed() {
-      return initialState;
+    sheetClosed(state) {
+      return { ...initialState, restore: state.restore };
+    },
+    restoreRequested(state, action: PayloadAction<{ sheetId: string; selection: IdSelection }>) {
+      state.restore = action.payload;
     },
     selectionChanged(state, action: PayloadAction<IdSelection | null>) {
       state.selection = action.payload;

@@ -70,6 +70,8 @@ const ALWAYS_PREVENT = new Set([
   "Home",
   "End",
 ]);
+// Command chords the app handles itself (undo/redo and, later, formatting); the browser must not.
+const HANDLED_COMMAND_KEYS = new Set(["z", "y", "b", "i", "u"]);
 const PREVENT_WITHOUT_COMMAND = new Set(["Tab", "Enter", " ", "Escape", "Delete", "Backspace"]);
 
 class CellPainter implements ICellRendererComp<RowDatum> {
@@ -578,7 +580,13 @@ export class AgGridView implements GridView {
       // as Ctrl+Alt and still types).
       const typed =
         !e.metaKey && !(e.ctrlKey && !e.altKey) && !e.isComposing && [...e.key].length === 1;
-      if (ALWAYS_PREVENT.has(e.key) || typed || (!command && PREVENT_WITHOUT_COMMAND.has(e.key))) {
+      const handledChord = command && !e.altKey && HANDLED_COMMAND_KEYS.has(e.key.toLowerCase());
+      if (
+        ALWAYS_PREVENT.has(e.key) ||
+        typed ||
+        handledChord ||
+        (!command && PREVENT_WITHOUT_COMMAND.has(e.key))
+      ) {
         e.preventDefault();
       }
       const info: KeyInfo = {

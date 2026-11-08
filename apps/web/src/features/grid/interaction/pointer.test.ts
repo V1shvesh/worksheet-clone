@@ -161,6 +161,11 @@ describe("pointer interaction", () => {
     const { view, store, interaction } = setup();
     view.pointerDown(cell(1, 1));
     interaction.dispose();
-    expect(store.getState().grid).toEqual({ sheetId: null, selection: null, editing: null });
+    expect(store.getState().grid).toEqual({
+      sheetId: null,
+      selection: null,
+      editing: null,
+      restore: null,
+    });
   });
 });

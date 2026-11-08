@@ -120,10 +120,53 @@ describe("keyboard navigation (not editing)", () => {
     key("Shift");
     key("F5");
     key("c", { ctrlKey: true });
-    key("z", { metaKey: true });
     key("ArrowDown", { ctrlKey: true });
     expect(grid()).toEqual(before);
     expect(transactions).toHaveLength(0);
+  });
+});
+
+describe("undo/redo chords", () => {
+  function withHistory() {
+    const calls: string[] = [];
+    const history = { undo: () => calls.push("undo"), redo: () => calls.push("redo") };
+    return { calls, ...setup({ history }) };
+  }
+
+  it("Cmd/Ctrl+Z undoes; Cmd/Ctrl+Shift+Z and Ctrl+Y redo", () => {
+    const { key, calls, select, transactions } = withHistory();
+    select(1, 1);
+    key("z", { metaKey: true });
+    key("z", { ctrlKey: true });
+    key("Z", { metaKey: true, shiftKey: true });
+    key("Z", { ctrlKey: true, shiftKey: true });
+    key("y", { ctrlKey: true });
+    expect(calls).toEqual(["undo", "undo", "redo", "redo", "redo"]);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("does not start an edit or treat other chords as history", () => {
+    const { key, calls, select, grid } = withHistory();
+    select(1, 1);
+    key("y", { metaKey: true });
+    expect(calls).toEqual([]);
+    expect(grid().editing).toBeNull();
+  });
+
+  it("leaves Cmd+Z to the text editor while editing", () => {
+    const { key, calls, select, grid } = withHistory();
+    select(1, 1);
+    key("a");
+    key("z", { metaKey: true });
+    expect(calls).toEqual([]);
+    expect(grid().editing?.draft).toBe("a");
+  });
+
+  it("is a no-op without a history provider", () => {
+    const { key, select, grid } = setup();
+    select(1, 1);
+    key("z", { metaKey: true });
+    expect(grid().editing).toBeNull();
   });
 });
 

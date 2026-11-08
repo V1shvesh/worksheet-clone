@@ -53,6 +53,8 @@ export interface GridInteractionDeps {
    */
   target: { doc: Y.Doc; readOnly: boolean };
   sheetId: string;
+  /** Undo/redo for Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y; the callee restores sheet and selection. */
+  history?: { undo(): void; redo(): void };
 }
 
 export interface GridInteraction {
@@ -70,7 +72,7 @@ export interface GridInteraction {
  * the overlay and container call into this, the grid never does.
  */
 export function createGridInteraction(deps: GridInteractionDeps): GridInteraction {
-  const { view, model, store, target, sheetId } = deps;
+  const { view, model, store, target, sheetId, history } = deps;
   let pointer: PointerState = initialPointerState;
 
   store.dispatch(gridActions.sheetOpened(sheetId));
@@ -119,10 +121,21 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
   };
 
   const run = (command: GridCommand) => {
-    if (command.type === "setCellInput") {
-      setCellInput(target, sheetId, command.cell, command.raw);
-    } else {
-      clearRange(target, sheetId, command.range, model);
+    switch (command.type) {
+      case "setCellInput":
+        setCellInput(target, sheetId, command.cell, command.raw);
+        break;
+      case "clearRange":
+        clearRange(target, sheetId, command.range, model);
+        break;
+      case "undo":
+      case "redo": {
+        history?.[command.type]();
+        view.focus();
+        const restored = resolveSelection(store.getState().grid.selection, model);
+        if (restored) view.scrollIntoView(restored.focus);
+        break;
+      }
     }
   };
 

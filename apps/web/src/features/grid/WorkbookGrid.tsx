@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
 import { createFormulaEngine, type FormulaEngine } from "../../engine";
+import { useUndoRedo } from "../toolbar/useUndoRedo";
 import { GridContainer } from "./GridContainer";
 
 /**
@@ -10,6 +11,7 @@ import { GridContainer } from "./GridContainer";
  */
 export function WorkbookGrid({ sheetId }: { sheetId: string }) {
   const { doc } = useWorkbookDoc();
+  const { undo, redo } = useUndoRedo();
   const [engine, setEngine] = useState<FormulaEngine | null>(null);
 
   useEffect(() => {
@@ -23,5 +25,5 @@ export function WorkbookGrid({ sheetId }: { sheetId: string }) {
 
   if (!engine) return null;
   // Remount per sheet: selection, editor and the adapter are per-sheet sessions.
-  return <GridContainer key={sheetId} sheetId={sheetId} engine={engine} />;
+  return <GridContainer key={sheetId} sheetId={sheetId} engine={engine} history={{ undo, redo }} />;
 }

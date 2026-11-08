@@ -1,0 +1,14 @@
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+.toolbar button {
+  min-width: 28px;
+  height: 28px;
+}
+.toolbar button[aria-pressed="true"] {
+  background: #d0e4ff;
+}

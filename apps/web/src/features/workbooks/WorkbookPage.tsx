@@ -3,6 +3,7 @@ import { getApiErrorMessage } from "../../app/apiErrors";
 import { WorkbookDocProvider } from "../../crdt/WorkbookDoc";
 import { Toasts } from "../toasts/Toasts";
 import { SheetTabs } from "../sheets/SheetTabs";
+import { Toolbar } from "../toolbar/Toolbar";
 import { LiveGrid } from "./LiveGrid";
 import { WorkbookHeader } from "./WorkbookHeader";
 import { useGetWorkbookQuery } from "./workbooksApi";
@@ -21,6 +22,7 @@ export function WorkbookPage() {
           <WorkbookHeader workbook={workbook} />
           {/* Only connect once REST has confirmed membership. */}
           <WorkbookDocProvider workbookId={workbook.id}>
+            <Toolbar />
             <LiveGrid />
             <SheetTabs />
             <Toasts />

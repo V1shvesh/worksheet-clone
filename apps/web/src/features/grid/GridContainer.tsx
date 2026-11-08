@@ -16,6 +16,8 @@ export interface GridContainerProps {
   engine: FormulaEngine;
   /** Adapter factory; tests inject the fake. */
   createView?: () => GridView;
+  /** Undo/redo for the keyboard chords (needs the router, so the container takes it as a prop). */
+  history?: { undo(): void; redo(): void };
 }
 
 interface Session {
@@ -31,6 +33,7 @@ export function GridContainer({
   sheetId,
   engine,
   createView = defaultCreateView,
+  history,
 }: GridContainerProps) {
   const { doc, readOnly } = useWorkbookDoc();
   const dispatch = useDispatch<AppDispatch>();
@@ -46,6 +49,8 @@ export function GridContainer({
   const createViewRef = useRef(createView);
   createViewRef.current = createView;
 
+  const historyRef = useRef(history);
+  historyRef.current = history;
   useEffect(() => {
     const el = mountEl.current;
     if (!el) return;
@@ -64,6 +69,10 @@ export function GridContainer({
         },
       },
       sheetId,
+      history: {
+        undo: () => historyRef.current?.undo(),
+        redo: () => historyRef.current?.redo(),
+      },
     });
     setSession({ view, model, controller });
 

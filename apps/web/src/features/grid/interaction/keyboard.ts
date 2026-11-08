@@ -17,7 +17,10 @@ export interface KeyboardState {
 }
 
 export type GridCommand =
-  { type: "setCellInput"; cell: CellCoord; raw: string } | { type: "clearRange"; range: CellRange };
+  | { type: "setCellInput"; cell: CellCoord; raw: string }
+  | { type: "clearRange"; range: CellRange }
+  | { type: "undo" }
+  | { type: "redo" };
 
 export interface KeyboardEnv {
   rowCount: number;
@@ -62,6 +65,18 @@ function isShortcut(key: KeyInfo): boolean {
   if (key.metaKey) return true;
   if (key.ctrlKey && !key.altKey) return true;
   return key.altKey && !isPrintable(key.key);
+}
+
+/**
+ * Undo/redo chords: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y. They are commands, not
+ * pass-through shortcuts, so the browser's own history never sees them.
+ */
+function historyCommand(key: KeyInfo): GridCommand | null {
+  if (!(key.metaKey || key.ctrlKey) || key.altKey) return null;
+  const k = key.key.toLowerCase();
+  if (k === "z") return { type: key.shiftKey ? "redo" : "undo" };
+  if (k === "y" && key.ctrlKey && !key.metaKey && !key.shiftKey) return { type: "redo" };
+  return null;
 }
 
 /** A single printable character; named keys ("Shift", "Enter", ...) are longer. */
@@ -111,13 +126,15 @@ function reduceEditingKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv):
 }
 
 /**
- * Pure keyboard map. Ctrl/Cmd/Alt combos are ignored (clipboard and undo arrive
- * later). Returns the next selection/editing state plus commands for the caller
+ * Pure keyboard map. Undo/redo chords become commands; other Ctrl/Cmd/Alt combos are
+ * ignored (clipboard arrives later). Returns the next selection/editing state plus commands for the caller
  * to run; it never writes anything itself.
  */
 export function reduceKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv): KeyboardResult {
   if (env.rowCount === 0 || env.colCount === 0) return { state, commands: [] };
   if (state.editing) return reduceEditingKey(state, key, env);
+  const history = historyCommand(key);
+  if (history) return { state, commands: [history] };
   if (isShortcut(key)) return { state, commands: [] };
 
   const sel = state.selection;
