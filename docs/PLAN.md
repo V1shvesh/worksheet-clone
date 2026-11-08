@@ -84,9 +84,9 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 
 ## M7 — Row/column structure operations
 
-- Insert above/below/left/right, delete, reorder via drag on headers (adapter emits `*MoveRequested`, model decides); our own context menu in `overlay/`
-- All structure ops touch only order arrays; formulas keep pointing at the right cells; deleted refs → `#REF!`
-- Duplicate-id de-dup on read for concurrent moves
+- Insert above/below/left/right (N rows/cols for an N-row/col selection), delete; our own context menu in `overlay/` (+ Ctrl+Alt+= / Ctrl+Alt+-); size cap 10,000 rows × 500 columns per sheet
+- All structure ops touch only order arrays (plus removing a deleted row/col's cells, formats and sizes in the same transaction); formulas keep pointing at the right cells; deleted single-cell refs → `#REF!`; a range whose first/last row/col is deleted shrinks to the nearest surviving one inside it, as in Excel (decided 2026-11-08); a fully deleted range → `#REF!`
+- Reordering is deferred (see future scope); AG Grid's own column drag is switched off so a header drag doesn't pretend to move a column
 - Column width / row height resize (persisted in doc)
   **Done when:** concurrent "insert row" + "edit cell below it" from two clients converge to the correct result (server e2e + Playwright).
 
@@ -116,6 +116,7 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 - Server-side HyperFormula for exports (CSV/XLSX)
 - Cut/paste rewriting references: after a cut-paste, other formulas that pointed at the moved cells still point at the (now empty) source cells; Excel redirects them
 - Fill handle double-click (auto-fill down to the end of the adjacent data)
+- Reorder rows/columns by dragging selected headers (Sheets-style), built on the port's pointer events for both axes; the order arrays already de-duplicate concurrent moves on read (deferred from M7, 2026-11-08)
 - Unique sheet names under concurrency: two users adding or renaming sheets at the same instant can end up with two sheets of the same name (each client only checks its own copy). Existing formulas are unaffected because they store sheet ids; a newly typed `Name!A1` resolves to the first matching sheet in tab order, the same on every client. A fix would be a server-side rename of the later duplicate (e.g. "Sheet2 (2)").
 
 ---
