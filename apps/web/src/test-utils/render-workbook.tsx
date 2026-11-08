@@ -5,7 +5,7 @@ import { MemoryRouter, useLocation, useNavigationType } from "react-router-dom";
 import type * as Y from "yjs";
 import { createStore } from "../app/store";
 import { WorkbookDocContext } from "../crdt/WorkbookDoc";
-import { createWorkbookUndo } from "../crdt/undo";
+import { captureUndoContext, createWorkbookUndo } from "../crdt/undo";
 
 /** Shows where the router is and how it got there (PUSH, REPLACE or POP). */
 export function LocationProbe() {
@@ -35,10 +35,7 @@ export function renderWithWorkbook(
   let readOnlyNow = options.readOnly ?? false;
   const undo = createWorkbookUndo(options.doc, {
     isReadOnly: () => readOnlyNow,
-    getContext: () => {
-      const { sheetId, selection } = store.getState().grid;
-      return { sheetId, selection };
-    },
+    getContext: () => captureUndoContext(options.doc, store.getState().grid),
   });
   const tree = (readOnly: boolean) => (
     <Provider store={store}>

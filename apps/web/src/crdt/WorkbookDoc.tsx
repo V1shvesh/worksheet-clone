@@ -6,7 +6,7 @@ import type { RootState } from "../app/store";
 import { handleCollabNotice } from "./handleCollabNotice";
 import { authApi } from "../features/auth/authApi";
 import { collabActions } from "./collabSlice";
-import { createWorkbookUndo, type WorkbookUndo } from "./undo";
+import { captureUndoContext, createWorkbookUndo, type WorkbookUndo } from "./undo";
 
 interface WorkbookDocValue {
   doc: Y.Doc;
@@ -45,10 +45,7 @@ export function WorkbookDocProvider({
     const ydoc = new Y.Doc();
     const undo = createWorkbookUndo(ydoc, {
       isReadOnly: () => readOnlyRef.current,
-      getContext: () => {
-        const { sheetId, selection } = store.getState().grid;
-        return { sheetId, selection };
-      },
+      getContext: () => captureUndoContext(ydoc, store.getState().grid),
     });
     dispatch(collabActions.opened(workbookId));
 

@@ -390,8 +390,9 @@ describe("editing", () => {
     select(1, 1);
     key("v");
     doc.transact(() => getRowOrderArray(doc, sheetId).delete(1, 1), Symbol("remote"));
-    key("Enter");
+    // Dropped as soon as the row is gone (with a toast), not only when Enter is pressed.
     expect(grid().editing).toBeNull();
+    key("Enter");
     expect(transactions).not.toContain(LOCAL_ORIGIN);
   });
 });

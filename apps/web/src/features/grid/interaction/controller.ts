@@ -35,6 +35,7 @@ import {
 import { parseClipboardHtml } from "./clipboard-html";
 import { fillExtent, fillPointer, type FillExtent } from "./fill";
 import { buildMenu, structureShortcut, type MenuAction, type MenuItem } from "./context-menu";
+import type { ModelEvent } from "../model";
 import { parseTsv } from "./tsv";
 import {
   cancelEditing,
@@ -59,10 +60,12 @@ import {
 import {
   cellIdAt,
   idSelectionsEqual,
+  repairSelection,
   resolveSelection,
   toIdSelection,
   type IdMapper,
   type IndexSelection,
+  type OrderSnapshot,
 } from "./selection";
 
 export interface GridStore {
@@ -76,6 +79,9 @@ export interface InteractionModel extends IdMapper {
   dimensions(): GridDimensions;
   getRawInput(cell: CellCoord): string;
   getCell(cell: CellCoord): CellRenderData;
+  /** Structure changes (rows/columns inserted or deleted), to repair selection and edits. */
+  subscribe(listener: (event: ModelEvent) => void): () => void;
+  orders(): OrderSnapshot;
 }
 
 export interface GridInteractionDeps {
@@ -450,7 +456,39 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     cancel: fillCancel,
   };
 
+  /**
+   * Rows or columns changed under us (a collaborator's delete, or our own undo). Selection and
+   * the open edit are stored as ids, so they survive inserts untouched; a deleted corner moves
+   * to the row/column now at its old index, and an edit of a deleted cell is cancelled.
+   */
+  const structureChanged = (prior: OrderSnapshot) => {
+    const state = store.getState().grid;
+    if (state.selection) {
+      const repaired = repairSelection(state.selection, model.orders(), prior);
+      if (repaired && !idSelectionsEqual(repaired, state.selection)) {
+        store.dispatch(gridActions.selectionChanged(repaired));
+      }
+    }
+    const e = state.editing;
+    if (e) {
+      const rowGone = model.rowIndexOf(e.rowId) === undefined;
+      const colGone = model.colIndexOf(e.colId) === undefined;
+      if (rowGone || colGone) {
+        store.dispatch(gridActions.editingEnded());
+        toast(
+          rowGone
+            ? "The row you were editing was deleted"
+            : "The column you were editing was deleted",
+        );
+      }
+    }
+  };
+  const offModel = model.subscribe((event) => {
+    if (event.type === "structure") structureChanged(event.prior);
+  });
+
   const offs = [
+    offModel,
     view.on("pointerDown", (t, e) => {
       view.focus();
       // Clicking elsewhere commits the open edit, like a spreadsheet.

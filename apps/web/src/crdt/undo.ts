@@ -1,7 +1,12 @@
 import { useSyncExternalStore } from "react";
 import * as Y from "yjs";
-import { getSheetOrderArray, getSheetsMap } from "@worksheet-clone/shared";
-import type { IdSelection } from "../features/grid/interaction/selection";
+import {
+  getSheetOrderArray,
+  getSheetsMap,
+  readColOrder,
+  readRowOrder,
+} from "@worksheet-clone/shared";
+import { withHint, type IdSelection } from "../features/grid/interaction/selection";
 import { LOCAL_ORIGIN } from "./origin";
 import { useWorkbookDoc } from "./WorkbookDoc";
 
@@ -12,6 +17,26 @@ import { useWorkbookDoc } from "./WorkbookDoc";
 export interface UndoContext {
   sheetId: string | null;
   selection: IdSelection | null;
+}
+
+/**
+ * The context an action is recorded with, taken from Redux's grid state. The selection gets an
+ * index hint (computed against the doc as it is NOW, i.e. before the action) so that undoing
+ * after a collaborator deleted its rows can still land on the nearest surviving ones.
+ */
+export function captureUndoContext(
+  doc: Y.Doc,
+  grid: { sheetId: string | null; selection: IdSelection | null },
+): UndoContext {
+  const { sheetId, selection } = grid;
+  if (!sheetId || !selection) return { sheetId, selection };
+  return {
+    sheetId,
+    selection: withHint(selection, {
+      rowIds: readRowOrder(doc, sheetId),
+      colIds: readColOrder(doc, sheetId),
+    }),
+  };
 }
 
 export interface UndoState {
@@ -60,8 +85,17 @@ export function createWorkbookUndo(doc: Y.Doc, deps: WorkbookUndoDeps): Workbook
   // mirror of the popped one and carries its context; everything else is a new action.
   let inherit: { context: UndoContext | null } | null = null;
 
+  // The context is read BEFORE the transaction runs: the action may itself delete the rows
+  // the selection sits on, and the hint must be computed against the old order.
+  let before: UndoContext | null = null;
+  const onBefore = (tr: Y.Transaction) => {
+    if (tr.origin === LOCAL_ORIGIN) before = deps.getContext();
+  };
+  doc.on("beforeTransaction", onBefore);
+
   const onAdded = ({ stackItem }: { stackItem: Y.UndoManager["undoStack"][number] }) => {
-    stackItem.meta.set(CONTEXT_KEY, inherit ? inherit.context : deps.getContext());
+    stackItem.meta.set(CONTEXT_KEY, inherit ? inherit.context : (before ?? deps.getContext()));
+    before = null;
   };
   manager.on("stack-item-added", onAdded);
 
@@ -98,6 +132,7 @@ export function createWorkbookUndo(doc: Y.Doc, deps: WorkbookUndoDeps): Workbook
       return () => listeners.delete(listener);
     },
     destroy() {
+      doc.off("beforeTransaction", onBefore);
       listeners.clear();
       manager.destroy();
     },

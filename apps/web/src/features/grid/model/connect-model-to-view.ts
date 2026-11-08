@@ -6,7 +6,7 @@ export function connectModelToView(model: SheetViewModel, view: GridView): () =>
   return model.subscribe((event) => {
     if (event.type === "cells") {
       view.refreshCells(event.cells);
-    } else {
+    } else if (event.type === "dimensions") {
       view.setDimensions(model.dimensions());
       view.refreshCells("all");
     }

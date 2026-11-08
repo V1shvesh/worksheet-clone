@@ -17,12 +17,21 @@ import {
 } from "@worksheet-clone/shared";
 import { lookupSheetIndex, type EngineValue, type FormulaEngine } from "../../../engine";
 import { parseCellInput } from "../commands/parse-cell-input";
+import type { OrderSnapshot } from "../interaction/selection";
 import type { CellCoord, CellRenderData, GridDimensions } from "../port";
 
 export const DEFAULT_ROW_HEIGHT = 24;
 export const DEFAULT_COL_WIDTH = 100;
 
-export type ModelEvent = { type: "cells"; cells: CellCoord[] } | { type: "dimensions" };
+export type ModelEvent =
+  | { type: "cells"; cells: CellCoord[] }
+  | { type: "dimensions" }
+  /**
+   * Rows or columns were inserted, deleted or moved (by anyone, undo included). Carries the
+   * order BEFORE the change, so listeners can tell where a vanished row/column used to be.
+   * Emitted once per transaction, after the engine has reported its rebuild.
+   */
+  | { type: "structure"; prior: OrderSnapshot };
 
 /** Display text for a computed value; 15 significant digits hides float noise (0.1+0.2). */
 function displayValue(value: EngineValue): { text: string; error?: true } {
@@ -45,6 +54,7 @@ export class SheetViewModel {
   private listeners = new Set<(event: ModelEvent) => void>();
   private pendingFormatKeys = new Set<string>();
   private dimensionsDirty = false;
+  private priorOrders: OrderSnapshot | null = null;
   private readonly cleanups: (() => void)[] = [];
 
   constructor(
@@ -65,7 +75,11 @@ export class SheetViewModel {
     // Order changes reload the id caches now but notify only when the engine
     // reports its rebuild: observers run before the engine's afterTransaction
     // handler, and a refresh sent earlier would paint stale values.
-    const ordersChanged = () => this.reloadOrders();
+    const ordersChanged = () => {
+      // Row and column arrays fire separately in one transaction: keep the first snapshot.
+      this.priorOrders ??= { rowIds: this.rowIds, colIds: this.colIds };
+      this.reloadOrders();
+    };
     observe(getRowOrderArray(doc, sheetId), ordersChanged);
     observe(getColOrderArray(doc, sheetId), ordersChanged);
     observe(getRowHeightsMap(doc, sheetId), sizeChanged);
@@ -99,6 +113,11 @@ export class SheetViewModel {
   }
 
   private flush(): void {
+    if (this.priorOrders) {
+      const prior = this.priorOrders;
+      this.priorOrders = null;
+      this.emit({ type: "structure", prior });
+    }
     if (this.dimensionsDirty) {
       this.dimensionsDirty = false;
       this.emit({ type: "dimensions" });
@@ -113,6 +132,11 @@ export class SheetViewModel {
     }
     this.pendingFormatKeys.clear();
     if (cells.length > 0) this.emit({ type: "cells", cells });
+  }
+
+  /** Current row/column order, for selection repair. */
+  orders(): OrderSnapshot {
+    return { rowIds: this.rowIds, colIds: this.colIds };
   }
 
   dimensions(): GridDimensions {

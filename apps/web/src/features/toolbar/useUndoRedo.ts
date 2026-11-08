@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 import { useDispatch, useStore } from "react-redux";
-import { readVisibleSheetOrder } from "@worksheet-clone/shared";
+import { readColOrder, readRowOrder, readVisibleSheetOrder } from "@worksheet-clone/shared";
 import type { AppDispatch, RootState } from "../../app/store";
 import { useWorkbookUndo, type WorkbookUndo } from "../../crdt/undo";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
 import { gridActions } from "../grid/gridSlice";
+import { repairSelection } from "../grid/interaction/selection";
 import { useActiveSheet } from "../sheets/useActiveSheet";
 
 /**
@@ -27,16 +28,19 @@ export function useUndoRedo() {
       const context = result?.context;
       if (!context || !context.sheetId) return;
       if (!readVisibleSheetOrder(doc).includes(context.sheetId)) return;
-      if (context.selection) {
+      // Rows or columns the remembered selection sat on may have been deleted since (by a
+      // collaborator); fall back to the nearest surviving ones at the recorded indices.
+      const selection =
+        context.selection &&
+        repairSelection(context.selection, {
+          rowIds: readRowOrder(doc, context.sheetId),
+          colIds: readColOrder(doc, context.sheetId),
+        });
+      if (selection) {
         if (store.getState().grid.sheetId === context.sheetId) {
-          dispatch(gridActions.selectionChanged(context.selection));
+          dispatch(gridActions.selectionChanged(selection));
         } else {
-          dispatch(
-            gridActions.restoreRequested({
-              sheetId: context.sheetId,
-              selection: context.selection,
-            }),
-          );
+          dispatch(gridActions.restoreRequested({ sheetId: context.sheetId, selection }));
         }
       }
       if (store.getState().grid.sheetId !== context.sheetId) openSheet(context.sheetId);

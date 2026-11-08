@@ -223,7 +223,9 @@ describe("SheetViewModel", () => {
       });
       const events = record(model);
       doc.transact(() => getRowOrderArray(doc, sheetId).delete(0, 1));
-      expect(events).toEqual([{ type: "dimensions" }]);
+      // The engine rebuilds first (dimensions), then the model reports the structure change
+      // together with the previous order.
+      expect(events.map((e) => e.type)).toEqual(["dimensions", "structure"]);
       // Row 0 is now the old row 1: its formula's referent is gone.
       expect(valueAtNotify).toMatchObject({ value: "#REF!" });
     });

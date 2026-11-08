@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   addSheet as addSheetToDoc,
   cellKey,
+  deleteRows,
   getCell,
   getFormatsMap,
   readColOrder,
@@ -114,6 +115,40 @@ describe("Toolbar undo/redo", () => {
     });
     expect(store.getState().grid.selection).toEqual(selection);
     expect(store.getState().grid.restore).toBeNull();
+  });
+});
+
+describe("Toolbar undo when the remembered selection's rows were deleted", () => {
+  it("falls back to the nearest surviving row at the recorded index", () => {
+    const { doc, sheetId } = newDoc();
+    const { store } = renderWithWorkbook(<Toolbar />, {
+      doc,
+      route: `/workbooks/w1?sheet=${sheetId}`,
+    });
+    const rows = readRowOrder(doc, sheetId);
+    const colId = readColOrder(doc, sheetId)[2]!;
+    act(() => {
+      store.dispatch(gridActions.sheetOpened(sheetId));
+      store.dispatch(
+        gridActions.selectionChanged({
+          anchor: { rowId: rows[5]!, colId },
+          focus: { rowId: rows[6]!, colId },
+        }),
+      );
+    });
+    // (The edit itself is on another row: deleting the rows of an edited cell would also drop
+    // that cell's undo step.)
+    write(doc, sheetId, 9, 1);
+    // A collaborator deletes both selected rows, and the selection moves on to elsewhere.
+    act(() => doc.transact(() => deleteRows(doc, sheetId, [rows[5]!, rows[6]!]), "remote"));
+    act(() => store.dispatch(gridActions.selectionChanged(null)));
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    // Indices 5 and 6 now hold the old rows 7 and 8: each corner is repaired at its recorded
+    // index (not dropped), and the stored selection no longer carries the hint.
+    expect(store.getState().grid.selection).toEqual({
+      anchor: { rowId: rows[7], colId },
+      focus: { rowId: rows[8], colId },
+    });
   });
 });
 
