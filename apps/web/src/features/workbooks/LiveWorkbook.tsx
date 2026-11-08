@@ -1,9 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
-import { useSelector } from "react-redux";
-import type { RootState } from "../../app/store";
 import { useWorkbookMutations } from "../../crdt/mutations";
 import { useSheetName, useSheetOrder } from "../../crdt/useDocValue";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
+import { ConnectionStatus } from "./ConnectionStatus";
 
 // Scaffold for M3: proves the live document end to end (connection status,
 // sheet list, a synced sheet name). M4b/M5 replace it with the grid and tabs.
@@ -21,26 +20,6 @@ export function LiveWorkbook() {
       </ul>
       {firstSheetId && <SheetNameField sheetId={firstSheetId} />}
     </section>
-  );
-}
-
-function ConnectionStatus() {
-  const { status, synced, access } = useSelector((state: RootState) => state.collab);
-
-  if (access === "denied") {
-    return <p role="alert">You don't have access to this workbook anymore.</p>;
-  }
-  const label =
-    status === "connected" && synced
-      ? "Live"
-      : status === "disconnected"
-        ? "Offline — reconnecting…"
-        : "Connecting…";
-  return (
-    <p role="status" aria-label="Connection">
-      {label}
-      {access === "read-only" && " · View only"}
-    </p>
   );
 }
 

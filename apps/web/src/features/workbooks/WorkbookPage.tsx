@@ -1,10 +1,10 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../app/apiErrors";
 import { WorkbookDocProvider } from "../../crdt/WorkbookDoc";
 import { Toasts } from "../toasts/Toasts";
 import { SheetTabs } from "../sheets/SheetTabs";
 import { LiveGrid } from "./LiveGrid";
-import { LiveWorkbook } from "./LiveWorkbook";
+import { WorkbookHeader } from "./WorkbookHeader";
 import { useGetWorkbookQuery } from "./workbooksApi";
 import "./WorkbookPage.css";
 
@@ -14,18 +14,13 @@ export function WorkbookPage() {
 
   return (
     <main className="workbook-page">
-      <p>
-        <Link to="/">← All workbooks</Link>
-      </p>
       {isLoading && <p>Loading…</p>}
       {isError && <p role="alert">{getApiErrorMessage(error)}</p>}
       {workbook && (
         <>
-          <h1>{workbook.name}</h1>
-          <p>Your role: {workbook.role}</p>
+          <WorkbookHeader workbook={workbook} />
           {/* Only connect once REST has confirmed membership. */}
           <WorkbookDocProvider workbookId={workbook.id}>
-            <LiveWorkbook />
             <LiveGrid />
             <SheetTabs />
             <Toasts />

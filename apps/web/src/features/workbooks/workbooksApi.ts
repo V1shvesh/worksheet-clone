@@ -1,4 +1,8 @@
-import type { CreateWorkbookInput, WorkbookSummary } from "@worksheet-clone/shared";
+import type {
+  CreateWorkbookInput,
+  RenameWorkbookInput,
+  WorkbookSummary,
+} from "@worksheet-clone/shared";
 import { api } from "../../app/api";
 
 export const workbooksApi = api.injectEndpoints({
@@ -18,6 +22,11 @@ export const workbooksApi = api.injectEndpoints({
       transformResponse: (response: { workbook: WorkbookSummary }) => response.workbook,
       invalidatesTags: ["Workbooks"],
     }),
+    renameWorkbook: builder.mutation<WorkbookSummary, { id: string } & RenameWorkbookInput>({
+      query: ({ id, name }) => ({ url: `/workbooks/${id}`, method: "PATCH", body: { name } }),
+      transformResponse: (response: { workbook: WorkbookSummary }) => response.workbook,
+      invalidatesTags: (_result, _error, { id }) => [{ type: "Workbooks", id }, "Workbooks"],
+    }),
     deleteWorkbook: builder.mutation<void, string>({
       query: (id) => ({ url: `/workbooks/${id}`, method: "DELETE" }),
       invalidatesTags: ["Workbooks"],
@@ -29,5 +38,6 @@ export const {
   useListWorkbooksQuery,
   useGetWorkbookQuery,
   useCreateWorkbookMutation,
+  useRenameWorkbookMutation,
   useDeleteWorkbookMutation,
 } = workbooksApi;

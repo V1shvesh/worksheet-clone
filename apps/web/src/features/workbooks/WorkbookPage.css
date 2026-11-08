@@ -19,3 +19,17 @@ body:has(.workbook-page) {
   padding: 8px;
   color: #666;
 }
+.workbook-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+.workbook-header h1,
+.workbook-header-name {
+  margin: 4px 0;
+  font-size: 1.25rem;
+}
+.workbook-header p {
+  margin: 0;
+}
