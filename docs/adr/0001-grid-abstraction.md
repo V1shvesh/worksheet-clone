@@ -118,7 +118,8 @@ export interface GridEvents {
 
 ## Portability guarantees
 
-- **Port contract tests** (`port/contract.test.ts`): a shared suite run against every adapter (fake in Vitest/jsdom; AG Grid in Playwright component tests) — geometry consistency, `hitTest(getCellRect(c)) === c`, refresh semantics, event mapping.
+- **Port contract tests** (`port/contract.test.ts`): a shared suite run against every adapter (fake in Vitest/jsdom; AG Grid in Playwright against a Vite-served harness page, see below) — geometry consistency, `hitTest(getCellRect(c)) === c`, refresh semantics, event mapping.
+- **Where the AG Grid contract runs:** `e2e/harness/grid-contract.html` (served only by the Vite dev server, never part of the production build) runs the same `gridViewContract` cases in a real browser; pointer and key input are real, forwarded to Playwright's `page.mouse` / `page.keyboard`. We did not use Playwright component testing because its current release needs Vite 8 and pins a different Playwright version than the one we use (Vite 5, Playwright 1.63).
 - **E2E tests never use grid-library selectors.** The shared cell renderer sets `data-row`, `data-col` and `role="gridcell"`; overlays have `data-testid`s. Playwright specs go through a `GridPage` page object; only it knows DOM details.
 - Everything above `port/` is tested with the `fake` adapter, so most grid tests don't depend on AG Grid at all.
 

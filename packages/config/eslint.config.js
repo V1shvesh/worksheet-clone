@@ -24,7 +24,9 @@ export const baseConfig = tseslint.config(
         {
           patterns: [
             {
-              group: ["ag-grid-*"],
+              // A regex, not the glob "ag-grid-*": the glob also matched our own relative
+              // import of adapters/ag-grid/ag-grid-view from outside the adapter folder.
+              regex: "^ag-grid-",
               message:
                 "ag-grid-* may only be imported inside features/grid/adapters/ag-grid/** (ADR-0001).",
             },

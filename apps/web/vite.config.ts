@@ -3,6 +3,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
+  // Pre-bundle the harness's deps up front; otherwise Vite discovers them mid-test and reloads.
+  optimizeDeps: { entries: ["index.html", "e2e/harness/*.html"] },
   server: {
     port: 5173,
     proxy: {
