@@ -125,6 +125,106 @@ export class GridPage {
     await this.page.keyboard.press("Enter");
   }
 
+  // --- structure: context menu, header selection, resizing -----------------------------
+
+  contextMenu(): Locator {
+    return this.page.getByTestId("grid-context-menu");
+  }
+
+  /** A menu item by its id: `insert-rows-above`, `delete-rows`, `delete-cols`, `clear`, ... */
+  menuItem(id: string): Locator {
+    return this.page.getByTestId(`menu-${id}`);
+  }
+
+  async rightClickCell(row: number, col: number): Promise<void> {
+    await this.cell(row, col).click({ button: "right" });
+    await expect(this.contextMenu()).toBeVisible();
+  }
+
+  async rightClickRowHeader(row: number): Promise<void> {
+    await this.rowHeader(row).click({ button: "right" });
+    await expect(this.contextMenu()).toBeVisible();
+  }
+
+  async rightClickColumnHeader(col: number): Promise<void> {
+    await this.columnHeader(col).click({ button: "right" });
+    await expect(this.contextMenu()).toBeVisible();
+  }
+
+  /** Clicks a menu item and waits for the menu to close. */
+  async chooseMenuItem(id: string): Promise<void> {
+    await this.menuItem(id).click();
+    await expect(this.contextMenu()).toHaveCount(0);
+  }
+
+  /** Selects whole rows: click the first row header, Shift+click the last. */
+  async selectRows(from: number, to = from): Promise<void> {
+    await this.rowHeader(from).click();
+    if (to !== from) await this.rowHeader(to).click({ modifiers: ["Shift"] });
+  }
+
+  /** Selects whole columns: click the first column header, Shift+click the last. */
+  async selectColumns(from: number, to = from): Promise<void> {
+    await this.columnHeader(from).click();
+    if (to !== from) await this.columnHeader(to).click({ modifiers: ["Shift"] });
+  }
+
+  /** The text of a row header, i.e. the row number the user sees. */
+  async rowHeaderLabel(row: number): Promise<string> {
+    return ((await this.rowHeader(row).textContent()) ?? "").trim();
+  }
+
+  rowResizeHandle(): Locator {
+    return this.page.getByTestId("row-resize-handle");
+  }
+
+  /**
+   * The row header's height in px (the row's height, give or take a border pixel). 0 while the
+   * header is momentarily not rendered (the grid re-renders after a resize), so it can be used
+   * inside `expect.poll`, which does not retry a throwing callback.
+   */
+  async rowHeight(row: number): Promise<number> {
+    const box = await this.rowHeader(row)
+      .boundingBox({ timeout: 1000 })
+      .catch(() => null);
+    return box ? Math.round(box.height) : 0;
+  }
+
+  /** The column header's width in px; 0 while it is not rendered (see `rowHeight`). */
+  async columnWidth(col: number): Promise<number> {
+    const box = await this.columnHeader(col)
+      .boundingBox({ timeout: 1000 })
+      .catch(() => null);
+    return box ? Math.round(box.width) : 0;
+  }
+
+  /** Real mouse drag of a row's bottom-edge handle (shown on hover) by `deltaY` pixels. */
+  async dragRowResize(row: number, deltaY: number): Promise<void> {
+    const header = await this.rowHeader(row).boundingBox();
+    if (!header) throw new Error(`row header ${row} is not rendered`);
+    await this.page.mouse.move(header.x + header.width / 2, header.y + header.height / 2);
+    const handle = await this.rowResizeHandle().boundingBox();
+    if (!handle) throw new Error("row resize handle is not rendered");
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await this.page.mouse.move(x, y);
+    await this.page.mouse.down();
+    await this.page.mouse.move(x, y + deltaY, { steps: 8 });
+    await this.page.mouse.up();
+  }
+
+  /** Real mouse drag of a column header's right edge by `deltaX` pixels. */
+  async dragColumnResize(col: number, deltaX: number): Promise<void> {
+    const header = await this.columnHeader(col).boundingBox();
+    if (!header) throw new Error(`column header ${col} is not rendered`);
+    const x = header.x + header.width - 2;
+    const y = header.y + header.height / 2;
+    await this.page.mouse.move(x, y);
+    await this.page.mouse.down();
+    await this.page.mouse.move(x + deltaX, y, { steps: 8 });
+    await this.page.mouse.up();
+  }
+
   async cellText(row: number, col: number): Promise<string> {
     return (await this.cell(row, col).textContent()) ?? "";
   }

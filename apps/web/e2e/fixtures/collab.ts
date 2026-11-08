@@ -85,11 +85,18 @@ export async function mockCollab(page: Page, options: { access: CollabAccess }) 
   });
 
   const sockets: WebSocketRoute[] = [];
+  // While set, everything the server sends to the page queues up here instead of being
+  // delivered (see `holdDelivery`). Order is preserved on release.
+  let held: { route: WebSocketRoute; data: Buffer }[] | null = null;
   await page.routeWebSocket(/\/collab$/, (route) => {
     sockets.push(route);
     const socket: WebSocketLike = {
       readyState: 1,
-      send: (data) => route.send(Buffer.from(data as Uint8Array)),
+      send: (data) => {
+        const bytes = Buffer.from(data as Uint8Array);
+        if (held) held.push({ route, data: bytes });
+        else route.send(bytes);
+      },
       close: (code, reason) => {
         socket.readyState = 3;
         void route.close({ code, reason });
@@ -161,6 +168,20 @@ export async function mockCollab(page: Page, options: { access: CollabAccess }) 
         },
         stop: () => doc.off("update", onUpdate),
       };
+    },
+    /**
+     * Holds back everything the server sends to the page, as a slow downlink would, while the
+     * page's own messages still reach the server. The page's view stays frozen at the moment of
+     * the call, so a test can let the server (or a collaborator) get ahead of it
+     * deterministically; `releaseDelivery` then delivers the queue in order.
+     */
+    holdDelivery(): void {
+      held ??= [];
+    },
+    releaseDelivery(): void {
+      const queue = held ?? [];
+      held = null;
+      for (const { route, data } of queue) route.send(data);
     },
     /** Simulates the network dropping every open socket. */
     dropConnections(): void {
