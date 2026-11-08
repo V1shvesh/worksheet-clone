@@ -11,6 +11,9 @@ export const COLLAB_CLOSE_CODES = {
 
 export const COLLAB_CLOSE_REASONS = {
   accessChanged: "access-changed",
+  // Same code, sent when the workbook itself was deleted: a refused reconnect alone
+  // can't tell the client "deleted" from "removed" (non-members get 404 either way).
+  workbookDeleted: "workbook-deleted",
   tooLarge: "too-large",
 } as const;
 

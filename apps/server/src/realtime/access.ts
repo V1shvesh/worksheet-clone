@@ -10,6 +10,7 @@ import type { CollabContext } from "./auth.js";
 // read-only, a removed member is refused.
 const ACCESS_CHANGED_CODE = COLLAB_CLOSE_CODES.accessChanged;
 const ACCESS_CHANGED_REASON = COLLAB_CLOSE_REASONS.accessChanged;
+const WORKBOOK_DELETED_REASON = COLLAB_CLOSE_REASONS.workbookDeleted;
 
 /** Disconnect one user's live sessions on a workbook (role change or removal). */
 export function revokeUserAccess(
@@ -40,7 +41,7 @@ export function revokeAllAccess(
   const document = hocuspocus.documents.get(workbookId);
   let closed = 0;
   for (const connection of document?.getConnections() ?? []) {
-    connection.webSocket.close(ACCESS_CHANGED_CODE, ACCESS_CHANGED_REASON);
+    connection.webSocket.close(ACCESS_CHANGED_CODE, WORKBOOK_DELETED_REASON);
     closed += 1;
   }
   if (closed > 0) {

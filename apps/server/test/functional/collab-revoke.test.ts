@@ -33,6 +33,7 @@ afterAll(async () => {
 
 interface Watched extends CollabClient {
   denials: string[];
+  closeReasons: string[];
 }
 
 async function connect(user: TestClient, workbookId: string): Promise<Watched> {
@@ -41,9 +42,13 @@ async function connect(user: TestClient, workbookId: string): Promise<Watched> {
   client.provider.on("authenticationFailed", ({ reason }: { reason: string }) =>
     denials.push(reason),
   );
+  const closeReasons: string[] = [];
+  client.provider.on("close", ({ event }: { event: { reason: string } }) =>
+    closeReasons.push(event.reason),
+  );
   clients.push(client);
   expect((await client.outcome).kind).toBe("synced");
-  return { ...client, denials };
+  return { ...client, denials, closeReasons };
 }
 
 async function setup(role: "editor" | "viewer") {
@@ -98,6 +103,7 @@ describe("revoking live access", { timeout: 15_000 }, () => {
     });
     expect(response.statusCode).toBe(204);
     await waitFor(() => memberClient.denials.includes("forbidden"), 5_000);
+    expect(memberClient.closeReasons).toContain("access-changed");
 
     rename(ownerClient, sheetId, "Secret plan");
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -119,6 +125,9 @@ describe("revoking live access", { timeout: 15_000 }, () => {
       5_000,
     );
     await waitFor(() => !app.collab.documents.has(workbook.id), 5_000);
+    // The close tells the client the workbook is gone (a removed member gets "access-changed").
+    expect(ownerClient.closeReasons).toContain("workbook-deleted");
+    expect(memberClient.closeReasons).toContain("workbook-deleted");
     expect(await loadDocumentState(workbook.id)).toBeNull();
   });
 });
