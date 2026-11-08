@@ -58,6 +58,11 @@ export interface KeyInfo {
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
+  /**
+   * AltGr is held (`getModifierState("AltGraph")`). On Windows AltGr also reports ctrl+alt, so this
+   * is the only way to tell "types a character" from a real Ctrl+Alt shortcut. Absent = false.
+   */
+  altGraph?: boolean;
 }
 
 export interface GridEvents {

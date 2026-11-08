@@ -14,6 +14,7 @@ import { resolveSelection, type Direction, type IdSelection } from "../interacti
 import type { SheetViewModel } from "../model";
 import { MAX_ROW_HEIGHT, MIN_ROW_HEIGHT } from "../../../crdt/mutations";
 import { isHeaderHit, rangeContains, type GridView, type Rect } from "../port";
+import { ContextMenu } from "./ContextMenu";
 import { visibleRangeRect } from "./geometry";
 
 export interface GridOverlayProps {
@@ -107,6 +108,7 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
 
   return (
     <div className="grid-overlay">
+      <ContextMenu view={view} controller={controller} />
       {selectionRect && (
         <div
           className="grid-selection-rect"

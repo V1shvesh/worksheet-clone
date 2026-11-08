@@ -4,6 +4,7 @@ import { createFormulaEngine } from "../../../engine";
 import { newDoc } from "../../../test-utils/workbook";
 import { FakeGridView } from "../adapters/fake/fake-grid-view";
 import { connectModelToView, SheetViewModel } from "../model";
+import type { StructureActions } from "../commands";
 import { createGridInteraction } from "./controller";
 
 /** Real doc + engine + model + store with a mounted fake grid, for interaction tests. */
@@ -15,6 +16,7 @@ export function mountInteraction(
     /** Share a store between two mounts (two sheets of one workbook). */
     store?: ReturnType<typeof createStore>;
     history?: { undo(): void; redo(): void };
+    structure?: StructureActions;
   } = {},
 ) {
   const fresh = opts.doc && opts.sheetId ? { doc: opts.doc, sheetId: opts.sheetId } : newDoc();
@@ -33,6 +35,7 @@ export function mountInteraction(
     target,
     sheetId,
     ...(opts.history ? { history: opts.history } : {}),
+    ...(opts.structure ? { structure: opts.structure } : {}),
   });
   return {
     doc,

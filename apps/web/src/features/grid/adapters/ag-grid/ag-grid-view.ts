@@ -595,6 +595,7 @@ export class AgGridView implements GridView {
         metaKey: e.metaKey,
         ctrlKey: e.ctrlKey,
         altKey: e.altKey,
+        altGraph: e.getModifierState("AltGraph"),
       };
       this.emit("keyDown", info);
     });

@@ -4,3 +4,4 @@ export * from "./clear-range";
 export * from "./format-selection";
 export * from "./paste";
 export * from "./fill-range";
+export * from "./structure-actions";

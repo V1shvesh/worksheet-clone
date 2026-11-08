@@ -17,6 +17,7 @@ declare global {
     __demo: {
       mount(): void;
       events: unknown[][];
+      keys: unknown[];
     };
     // Exposed by the Playwright spec via page.exposeFunction.
     __mouseClick(clientX: number, clientY: number): Promise<void>;
@@ -84,6 +85,7 @@ window.__contract = {
 // A standalone grid for the behavior spec: gestures, attributes and key handling.
 window.__demo = {
   events: [],
+  keys: [],
   mount() {
     const el = document.createElement("div");
     el.id = "grid";
@@ -99,6 +101,7 @@ window.__demo = {
     ] as const) {
       view.on(name, ((...args: unknown[]) => window.__demo.events.push([name, ...args])) as never);
     }
+    view.on("keyDown", (k) => window.__demo.keys.push(k));
     view.mount(
       el,
       {

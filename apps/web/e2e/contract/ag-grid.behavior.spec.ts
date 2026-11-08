@@ -157,3 +157,23 @@ test("clicking a cell keeps DOM focus on the grid container, never on AG Grid's 
   expect(focused.isRow).toBe(false);
   expect(focused.role).not.toBe("row");
 });
+
+test("keyDown reports whether AltGr is held, so Ctrl+Alt+= can be told from AltGr typing", async ({
+  page,
+}) => {
+  await mountGrid(page);
+  const keys = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>("#grid > div")!;
+    const press = (init: KeyboardEventInit) =>
+      root.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
+      );
+    press({ key: "=", code: "Equal", ctrlKey: true, altKey: true });
+    press({ key: "\\", code: "Minus", ctrlKey: true, altKey: true, modifierAltGraph: true });
+    return window.__demo.keys as { key: string; altGraph?: boolean }[];
+  });
+  expect(keys.map((k) => [k.key, k.altGraph])).toEqual([
+    ["=", false],
+    ["\\", true],
+  ]);
+});

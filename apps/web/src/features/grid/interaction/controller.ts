@@ -9,6 +9,10 @@ import { moveCells, pasteEntries } from "../commands/paste";
 import { setCellInput } from "../commands/set-cell-input";
 import { clipboardActions } from "../clipboardSlice";
 import { clearRange } from "../commands/clear-range";
+import {
+  unimplementedStructureActions,
+  type StructureActions,
+} from "../commands/structure-actions";
 import { toggleFormat } from "../commands/format-selection";
 import { gridActions } from "../gridSlice";
 import {
@@ -30,6 +34,7 @@ import {
 } from "./clipboard";
 import { parseClipboardHtml } from "./clipboard-html";
 import { fillExtent, fillPointer, type FillExtent } from "./fill";
+import { buildMenu, structureShortcut, type MenuAction, type MenuItem } from "./context-menu";
 import { parseTsv } from "./tsv";
 import {
   cancelEditing,
@@ -85,6 +90,11 @@ export interface GridInteractionDeps {
   sheetId: string;
   /** Undo/redo for Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y; the callee restores sheet and selection. */
   history?: { undo(): void; redo(): void };
+  /**
+   * Insert/delete rows and columns, for the context menu and Ctrl+Alt+= / Ctrl+Alt+-. Defaults to
+   * a no-op placeholder (`unimplementedStructureActions`).
+   */
+  structure?: StructureActions;
 }
 
 /** The fill-handle drag, driven by the overlay's pointer events (client coordinates). */
@@ -123,6 +133,10 @@ export interface GridInteraction {
    * resize, so the port's `rowResized` is not involved). One transaction; false when refused.
    */
   resizeRow(row: number, height: number): boolean;
+  /** The context menu's items for the current selection (empty when nothing is selected). */
+  menuItems(): MenuItem[];
+  /** Runs a menu action; refused (no-op) for viewers and for disabled actions. */
+  runMenuAction(action: MenuAction): void;
   /** Keep the Redux draft in sync with the overlay editor's text. */
   updateDraft(text: string): void;
   dispose(): void;
@@ -132,8 +146,18 @@ export interface GridInteraction {
  * Wires GridView events to the interaction state machines and Redux. Plain TS:
  * the overlay and container call into this, the grid never does.
  */
+function idsBetween(from: number, to: number, idAt: (i: number) => string | undefined): string[] {
+  const ids: string[] = [];
+  for (let i = from; i <= to; i++) {
+    const id = idAt(i);
+    if (id !== undefined) ids.push(id);
+  }
+  return ids;
+}
+
 export function createGridInteraction(deps: GridInteractionDeps): GridInteraction {
   const { view, model, store, target, sheetId, history } = deps;
+  const structure = deps.structure ?? unimplementedStructureActions;
   let pointer: PointerState = initialPointerState;
 
   store.dispatch(gridActions.sheetOpened(sheetId));
@@ -181,6 +205,34 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     return { selection, editing: { cell: { row, col }, draft: e.draft, mode: e.mode } };
   };
 
+  const runMenuAction = (action: MenuAction) => {
+    if (target.readOnly) return;
+    switch (action.type) {
+      case "insertRows":
+        structure.insertRows(action.at, action.count);
+        break;
+      case "insertCols":
+        structure.insertCols(action.at, action.count);
+        break;
+      case "deleteRows": {
+        // Deleting every row would leave no sheet to edit (the menu disables it, too).
+        if (action.to - action.from + 1 >= model.dimensions().rowCount) break;
+        const ids = idsBetween(action.from, action.to, (i) => model.rowIdAt(i));
+        if (ids.length > 0) structure.deleteRows(ids);
+        break;
+      }
+      case "deleteCols": {
+        if (action.to - action.from + 1 >= model.dimensions().colCount) break;
+        const ids = idsBetween(action.from, action.to, (j) => model.colIdAt(j));
+        if (ids.length > 0) structure.deleteCols(ids);
+        break;
+      }
+      case "clear":
+        clearRange(target, sheetId, action.range, model);
+        break;
+    }
+  };
+
   const run = (command: GridCommand) => {
     switch (command.type) {
       case "setCellInput":
@@ -192,6 +244,14 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       case "toggleFormat": {
         const selection = store.getState().grid.selection;
         if (selection) toggleFormat(target, sheetId, selection, command.flag);
+        break;
+      }
+      case "structure": {
+        const resolved = resolveSelection(store.getState().grid.selection, model);
+        const action =
+          resolved &&
+          structureShortcut(command.op, resolved.range, model.dimensions(), target.readOnly);
+        if (action) runMenuAction(action);
         break;
       }
       case "undo":
@@ -401,6 +461,8 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       applyPointer(pointerUp());
     }),
     view.on("contextMenu", (t) => {
+      // Like a left click elsewhere, opening the menu commits an open edit first.
+      commitEdit(store.getState().grid.editing?.draft ?? "", null);
       const selection = contextMenuSelection(t, pointerContext());
       if (selection) select(selection);
     }),
@@ -462,6 +524,11 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
         rowId !== undefined && setRowHeight(target.doc, target.readOnly, sheetId, rowId, height)
       );
     },
+    menuItems() {
+      const resolved = resolveSelection(store.getState().grid.selection, model);
+      return resolved ? buildMenu(resolved.range, model.dimensions(), target.readOnly) : [];
+    },
+    runMenuAction,
     updateDraft(text) {
       if (store.getState().grid.editing) store.dispatch(gridActions.draftChanged(text));
     },

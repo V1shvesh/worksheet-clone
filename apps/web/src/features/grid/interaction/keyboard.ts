@@ -20,6 +20,7 @@ export type GridCommand =
   | { type: "setCellInput"; cell: CellCoord; raw: string }
   | { type: "clearRange"; range: CellRange }
   | { type: "toggleFormat"; flag: "b" | "i" | "u" }
+  | { type: "structure"; op: "insert" | "delete" }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -82,6 +83,19 @@ function chordCommand(key: KeyInfo): GridCommand | null {
   return null;
 }
 
+/**
+ * Ctrl+Alt+= inserts and Ctrl+Alt+- deletes rows/columns (Sheets). On Windows AltGr is reported as
+ * ctrl+alt, and many layouts type characters with it, so this is a shortcut only when AltGr is
+ * NOT held (`altGraph`); an AltGr press falls through to ordinary typing. The physical key
+ * (`code`) also counts, because on macOS Ctrl+Option+= produces a different `key`.
+ */
+function structureChord(key: KeyInfo): "insert" | "delete" | null {
+  if (!key.ctrlKey || !key.altKey || key.metaKey || key.altGraph) return null;
+  if (key.key === "=" || key.key === "+" || key.code === "Equal") return "insert";
+  if (key.key === "-" || key.code === "Minus") return "delete";
+  return null;
+}
+
 /** A single printable character; named keys ("Shift", "Enter", ...) are longer. */
 function isPrintable(key: string): boolean {
   return [...key].length === 1;
@@ -138,6 +152,11 @@ export function reduceKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv):
   if (state.editing) return reduceEditingKey(state, key, env);
   const chord = chordCommand(key);
   if (chord) return { state, commands: [chord] };
+  const structure = structureChord(key);
+  if (structure) {
+    // Swallowed for viewers too: it must not fall through and type into a cell.
+    return { state, commands: env.readOnly ? [] : [{ type: "structure", op: structure }] };
+  }
   if (isShortcut(key)) return { state, commands: [] };
 
   const sel = state.selection;

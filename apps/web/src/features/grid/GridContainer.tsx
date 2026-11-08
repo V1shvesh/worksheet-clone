@@ -5,6 +5,7 @@ import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
 import type { FormulaEngine } from "../../engine";
 import { FormulaBar } from "../formula-bar/FormulaBar";
 import { AgGridView } from "./adapters/ag-grid/ag-grid-view";
+import { unimplementedStructureActions, type StructureActions } from "./commands";
 import { createGridInteraction, type GridInteraction } from "./interaction";
 import { connectModelToView, SheetViewModel } from "./model";
 import { GridOverlay } from "./overlay";
@@ -19,6 +20,11 @@ export interface GridContainerProps {
   createView?: () => GridView;
   /** Undo/redo for the keyboard chords (needs the router, so the container takes it as a prop). */
   history?: { undo(): void; redo(): void };
+  /**
+   * Insert/delete rows and columns for the context menu and shortcuts. Defaults to a no-op
+   * placeholder until the shared insert/delete helpers are wired in (see `StructureActions`).
+   */
+  structure?: StructureActions;
 }
 
 interface Session {
@@ -35,6 +41,7 @@ export function GridContainer({
   engine,
   createView = defaultCreateView,
   history,
+  structure = unimplementedStructureActions,
 }: GridContainerProps) {
   const { doc, readOnly } = useWorkbookDoc();
   const dispatch = useDispatch<AppDispatch>();
@@ -49,6 +56,9 @@ export function GridContainer({
   // `createView` is read once per session; a new function identity must not rebuild the grid.
   const createViewRef = useRef(createView);
   createViewRef.current = createView;
+
+  const structureRef = useRef(structure);
+  structureRef.current = structure;
 
   const historyRef = useRef(history);
   historyRef.current = history;
@@ -73,6 +83,12 @@ export function GridContainer({
       history: {
         undo: () => historyRef.current?.undo(),
         redo: () => historyRef.current?.redo(),
+      },
+      structure: {
+        insertRows: (at, count) => structureRef.current.insertRows(at, count),
+        insertCols: (at, count) => structureRef.current.insertCols(at, count),
+        deleteRows: (ids) => structureRef.current.deleteRows(ids),
+        deleteCols: (ids) => structureRef.current.deleteCols(ids),
       },
     });
     setSession({ view, model, controller });
