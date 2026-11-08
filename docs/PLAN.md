@@ -114,6 +114,7 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 - Second grid adapter (e.g. Glide Data Grid) if AG Grid Community limits us
 - Email invites, link sharing, comments
 - Server-side HyperFormula for exports (CSV/XLSX)
+- Unique sheet names under concurrency: two users adding or renaming sheets at the same instant can end up with two sheets of the same name (each client only checks its own copy). Existing formulas are unaffected because they store sheet ids; a newly typed `Name!A1` resolves to the first matching sheet in tab order, the same on every client. A fix would be a server-side rename of the later duplicate (e.g. "Sheet2 (2)").
 
 ---
 
