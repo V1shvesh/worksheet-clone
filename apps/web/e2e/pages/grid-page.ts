@@ -32,6 +32,74 @@ export class GridPage {
     return this.page.getByTestId("active-cell");
   }
 
+  formulaBar(): Locator {
+    return this.page.getByLabel("Formula bar", { exact: true });
+  }
+
+  nameBox(): Locator {
+    return this.page.getByTestId("name-box");
+  }
+
+  toolbarButton(name: "Undo" | "Redo" | "Bold" | "Italic" | "Underline" | "Fill color"): Locator {
+    return this.page.getByTestId("toolbar").getByRole("button", { name, exact: true });
+  }
+
+  fillHandle(): Locator {
+    return this.page.getByTestId("fill-handle");
+  }
+
+  fillPreview(): Locator {
+    return this.page.getByTestId("fill-preview");
+  }
+
+  cutRect(): Locator {
+    return this.page.getByTestId("cut-rect");
+  }
+
+  toasts(): Locator {
+    return this.page.getByTestId("toast");
+  }
+
+  /** Picks a swatch (by its name, e.g. "Yellow") from the toolbar's fill-color popover. */
+  async pickFillColor(name: string): Promise<void> {
+    await this.toolbarButton("Fill color").click();
+    await this.page
+      .getByRole("group", { name: "Fill colors" })
+      .getByRole("button", { name, exact: true })
+      .click();
+  }
+
+  /** Real mouse drag of the fill handle to the centre of the given cell. */
+  async dragFillHandle(row: number, col: number): Promise<void> {
+    const handle = await this.fillHandle().boundingBox();
+    if (!handle) throw new Error("fill handle is not rendered");
+    const to = await this.center(row, col);
+    await this.page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await this.page.mouse.down();
+    await this.page.mouse.move(to.x, to.y, { steps: 10 });
+    await this.page.mouse.up();
+  }
+
+  /** Real chord, e.g. "ControlOrMeta+c". */
+  async chord(keys: string): Promise<void> {
+    await this.page.keyboard.press(keys);
+  }
+
+  /** Puts text on the (browser) clipboard, as another app would. Needs clipboard permissions. */
+  async writeClipboard(text: string): Promise<void> {
+    await this.page.evaluate((t) => navigator.clipboard.writeText(t), text);
+  }
+
+  /** The clipboard's text/plain and text/html flavors. */
+  async readClipboard(): Promise<{ text: string; html: string }> {
+    return this.page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read();
+      const read = async (type: string) =>
+        item && item.types.includes(type) ? await (await item.getType(type)).text() : "";
+      return { text: await read("text/plain"), html: await read("text/html") };
+    });
+  }
+
   async clickCell(row: number, col: number): Promise<void> {
     await this.cell(row, col).click();
   }
