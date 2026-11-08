@@ -1,10 +1,18 @@
 import type { Page, WebSocketRoute } from "@playwright/test";
 import { Hocuspocus, type WebSocketLike } from "@hocuspocus/server";
+import {
+  Awareness,
+  applyAwarenessUpdate,
+  encodeAwarenessUpdate,
+  removeAwarenessStates,
+} from "y-protocols/awareness";
 import * as Y from "yjs";
 import {
   createEmptyWorkbook,
   diffSheetNames,
   isWorkbookInitialized,
+  readColOrder,
+  readRowOrder,
   readSheetNames,
   setSheetName,
   COLLAB_CLOSE_CODES,
@@ -24,6 +32,18 @@ export const BOB: Author = {
 };
 
 const PAGE_USER: Author = { userId: me.id, email: me.email };
+
+/** A simulated collaborator's presence; see `presencePeer`. */
+export interface PresencePeer {
+  /** Publishes the open sheet and selection (0-based visual indices; `focus` defaults to `anchor`). */
+  moveTo(
+    sheetId: string | null,
+    anchor?: { row: number; col: number } | null,
+    focus?: { row: number; col: number },
+  ): void;
+  /** Removes the peer's presence, as a closed tab does. */
+  leave(): void;
+}
 
 export type CollabAccess = "read-write" | "readonly" | "denied";
 
@@ -176,6 +196,54 @@ export async function mockCollab(
     broadcastWorkbookRenamed(workbookId: string, by: Author, from: string, to: string): void {
       const notice: CollabNotice = { type: "workbookRenamed", by, from, to };
       hocuspocus.documents.get(workbookId)?.broadcastStateless(JSON.stringify(notice));
+    },
+    /**
+     * A remote collaborator's presence. It is injected into the server document's awareness
+     * (a separate Awareness with its own clientID, applied like an inbound update), which
+     * Hocuspocus then broadcasts to every connected page. The fixture does not run the real
+     * server's awareness-identity extension (that is covered by the server's own tests), so it
+     * builds states with the identity the extension would enforce: `author` as the user.
+     * The page must be connected first (the server document has to exist). Presence states of
+     * clients that stop publishing are dropped by the awareness timeout after 30 s, longer
+     * than any spec here.
+     */
+    presencePeer(workbookId: string, author: Author = BOB): PresencePeer {
+      const serverDocument = hocuspocus.documents.get(workbookId);
+      if (!serverDocument) throw new Error(`workbook ${workbookId} is not loaded on the server`);
+      const peer = new Awareness(new Y.Doc());
+      const send = () =>
+        applyAwarenessUpdate(
+          serverDocument.awareness,
+          encodeAwarenessUpdate(peer, [peer.clientID]),
+          null,
+        );
+      peer.setLocalState({
+        user: { id: author.userId, email: author.email, color: "#000000" },
+        sheetId: null,
+        selection: null,
+      });
+      send();
+      return {
+        moveTo(sheetId, anchor = null, focus = anchor ?? undefined) {
+          const rows = sheetId ? readRowOrder(serverDocument, sheetId) : [];
+          const cols = sheetId ? readColOrder(serverDocument, sheetId) : [];
+          const cellAt = (c: { row: number; col: number }) => ({
+            rowId: rows[c.row]!,
+            colId: cols[c.col]!,
+          });
+          peer.setLocalState({
+            user: { id: author.userId, email: author.email, color: "#000000" },
+            sheetId,
+            selection:
+              sheetId && anchor && focus ? { anchor: cellAt(anchor), focus: cellAt(focus) } : null,
+          });
+          send();
+        },
+        leave() {
+          removeAwarenessStates(serverDocument.awareness, [peer.clientID], null);
+          peer.destroy();
+        },
+      };
     },
     /** The server's copy of the document (in memory, else last stored). */
     serverDoc(workbookId: string): Y.Doc | undefined {

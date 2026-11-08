@@ -32,6 +32,22 @@ export class GridPage {
     return this.page.getByTestId("active-cell");
   }
 
+  /** A collaborator's outline on their active cell (one per tab they have open on this sheet). */
+  remoteCursor(userId?: string): Locator {
+    const all = this.page.getByTestId("remote-cursor");
+    return userId ? all.and(this.page.locator(`[data-user-id="${userId}"]`)) : all;
+  }
+
+  remoteSelection(userId?: string): Locator {
+    const all = this.page.getByTestId("remote-selection");
+    return userId ? all.and(this.page.locator(`[data-user-id="${userId}"]`)) : all;
+  }
+
+  /** Who else is here, as avatars in the header. */
+  avatars(): Locator {
+    return this.page.getByTestId("presence-avatar");
+  }
+
   formulaBar(): Locator {
     return this.page.getByLabel("Formula bar", { exact: true });
   }
