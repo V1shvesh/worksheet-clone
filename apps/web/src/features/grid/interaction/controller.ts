@@ -1,10 +1,32 @@
 import type * as Y from "yjs";
+import { readColOrder, readRowOrder } from "@worksheet-clone/shared";
 import type { AppDispatch, RootState } from "../../../app/store";
+import { LOCAL_ORIGIN } from "../../../crdt/origin";
+import { toastsActions } from "../../toasts/toastsSlice";
+import { moveCells, pasteEntries } from "../commands/paste";
 import { setCellInput } from "../commands/set-cell-input";
+import { clipboardActions } from "../clipboardSlice";
 import { clearRange } from "../commands/clear-range";
 import { toggleFormat } from "../commands/format-selection";
 import { gridActions } from "../gridSlice";
-import { isHeaderHit, coordsEqual, type CellCoord, type GridView } from "../port";
+import {
+  isHeaderHit,
+  coordsEqual,
+  normalizeRange,
+  type CellCoord,
+  type CellRange,
+  type CellRenderData,
+  type GridView,
+} from "../port";
+import {
+  buildCopy,
+  MAX_PASTE_CELLS,
+  planPaste,
+  type ClipboardDataLike,
+  type PasteSource,
+} from "./clipboard";
+import { parseClipboardHtml } from "./clipboard-html";
+import { parseTsv } from "./tsv";
 import {
   cancelEditing,
   commitEditing,
@@ -36,12 +58,13 @@ import {
 
 export interface GridStore {
   dispatch: AppDispatch;
-  getState: () => Pick<RootState, "grid">;
+  getState: () => Pick<RootState, "grid" | "clipboard">;
 }
 
 /** What the controller reads from the view model (SheetViewModel satisfies this). */
 export interface InteractionModel extends IdMapper {
   getRawInput(cell: CellCoord): string;
+  getCell(cell: CellCoord): CellRenderData;
 }
 
 export interface GridInteractionDeps {
@@ -68,6 +91,14 @@ export interface GridInteraction {
    * read-only, nothing is selected, or an edit is already open. The formula bar uses this.
    */
   startEdit(source: "bar"): boolean;
+  /**
+   * Native copy/cut: writes text/plain (displayed values as TSV) and text/html (our payload)
+   * into `data`. Returns true when handled, so the caller can preventDefault; false when
+   * nothing is selected or a cell is being edited (native text copy must keep working).
+   */
+  copy(data: ClipboardDataLike, cut: boolean): boolean;
+  /** Native paste; same return contract as `copy`. Refused (but handled) while read-only. */
+  paste(data: ClipboardDataLike): boolean;
   /** Keep the Redux draft in sync with the overlay editor's text. */
   updateDraft(text: string): void;
   dispose(): void;
@@ -178,6 +209,114 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     apply(prev, commitEditing(prev, draft, move, env()));
   };
 
+  const clearCutMark = () => {
+    if (store.getState().clipboard.cutMark) store.dispatch(clipboardActions.cutCleared());
+  };
+  const toast = (message: string) => store.dispatch(toastsActions.pushed(message));
+
+  /** Any edit by this user abandons a pending cut (the move writes only after checking it). */
+  const onTransaction = (tr: Y.Transaction) => {
+    if (tr.origin === LOCAL_ORIGIN && tr.changed.size > 0) clearCutMark();
+  };
+  target.doc.on("afterTransaction", onTransaction);
+
+  const copy = (data: ClipboardDataLike, cut: boolean): boolean => {
+    const state = store.getState().grid;
+    if (state.editing) return false;
+    const resolved = resolveSelection(state.selection, model);
+    if (!resolved) return false;
+    if (cut && target.readOnly) return true;
+    const { text, html } = buildCopy(model, sheetId, resolved.range, cut);
+    data.setData("text/plain", text);
+    data.setData("text/html", html);
+    if (cut) {
+      const { start, end } = resolved.range;
+      const from = cellIdAt(start, model);
+      const to = cellIdAt(end, model);
+      if (from && to) {
+        store.dispatch(clipboardActions.cutMarked({ sheetId, range: { anchor: from, focus: to } }));
+      }
+    } else {
+      clearCutMark();
+    }
+    return true;
+  };
+
+  /** The cut that `payload` came from, if it is still pending and still describes the same cells. */
+  const pendingCut = (payload: NonNullable<ReturnType<typeof parseClipboardHtml>>) => {
+    const mark = store.getState().clipboard.cutMark;
+    if (!payload.cut || !mark || mark.sheetId !== payload.source.sheetId) return null;
+    const rows = readRowOrder(target.doc, mark.sheetId);
+    const cols = readColOrder(target.doc, mark.sheetId);
+    const r = [rows.indexOf(mark.range.anchor.rowId), rows.indexOf(mark.range.focus.rowId)];
+    const c = [cols.indexOf(mark.range.anchor.colId), cols.indexOf(mark.range.focus.colId)];
+    if (r.includes(-1) || c.includes(-1)) return null;
+    const range = normalizeRange(
+      { row: Math.min(...r), col: Math.min(...c) },
+      { row: Math.max(...r), col: Math.max(...c) },
+    );
+    const same =
+      range.start.row === payload.source.row &&
+      range.start.col === payload.source.col &&
+      range.end.row - range.start.row + 1 === payload.cells.length &&
+      range.end.col - range.start.col + 1 === (payload.cells[0]?.length ?? 0);
+    return same ? { sheetId: mark.sheetId, range } : null;
+  };
+
+  const selectRange = (range: CellRange) => select({ anchor: range.start, focus: range.end });
+  const tooLarge = () =>
+    toast(`Paste is too large (the limit is ${MAX_PASTE_CELLS.toLocaleString("en-US")} cells)`);
+  const CLIPPED = "Pasted data was cut to fit the sheet";
+
+  const paste = (data: ClipboardDataLike): boolean => {
+    const state = store.getState().grid;
+    if (state.editing) return false;
+    const resolved = resolveSelection(state.selection, model);
+    if (!resolved) return false;
+
+    const payload = parseClipboardHtml(data.getData("text/html"));
+    let source: PasteSource;
+    if (payload) {
+      source = { kind: "ours", payload };
+    } else {
+      const text = data.getData("text/plain");
+      if (text === "") return false;
+      source = { kind: "text", rows: parseTsv(text) };
+    }
+    if (target.readOnly) return true;
+
+    const cut = payload ? pendingCut(payload) : null;
+    if (payload && cut) {
+      if (payload.cells.length * (payload.cells[0]?.length ?? 0) > MAX_PASTE_CELLS) {
+        tooLarge();
+        return true;
+      }
+      const moved = moveCells(target, cut, { sheetId, anchor: resolved.anchor });
+      clearCutMark();
+      if (moved) {
+        selectRange(moved.range);
+        if (moved.clipped) toast(CLIPPED);
+      }
+      return true;
+    }
+
+    const plan = planPaste({
+      source,
+      anchor: resolved.anchor,
+      selection: resolved.range,
+      dims: model.dimensions(),
+    });
+    if (plan.kind === "tooLarge") {
+      tooLarge();
+      return true;
+    }
+    if (pasteEntries(target, sheetId, plan.entries)) {
+      selectRange(plan.range);
+      if (plan.clipped) toast(CLIPPED);
+    }
+    return true;
+  };
+
   const offs = [
     view.on("pointerDown", (t, e) => {
       view.focus();
@@ -206,6 +345,7 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     }),
     view.on("keyDown", (key) => {
       const prev = keyboardState();
+      if (key.key === "Escape" && !prev.editing) clearCutMark();
       apply(prev, reduceKey(prev, key, env()));
     }),
   ];
@@ -216,6 +356,8 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       const prev = keyboardState();
       if (prev.editing) apply(prev, cancelEditing(prev));
     },
+    copy,
+    paste,
     startEdit(source) {
       const state = store.getState().grid;
       if (target.readOnly || state.editing) return false;
@@ -237,6 +379,7 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     },
     dispose() {
       for (const off of offs.splice(0)) off();
+      target.doc.off("afterTransaction", onTransaction);
       store.dispatch(gridActions.sheetClosed());
     },
   };

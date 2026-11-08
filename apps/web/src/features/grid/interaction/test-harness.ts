@@ -12,6 +12,8 @@ export function mountInteraction(
     doc?: Y.Doc;
     sheetId?: string;
     readOnly?: boolean;
+    /** Share a store between two mounts (two sheets of one workbook). */
+    store?: ReturnType<typeof createStore>;
     history?: { undo(): void; redo(): void };
   } = {},
 ) {
@@ -22,7 +24,7 @@ export function mountInteraction(
   const view = new FakeGridView();
   view.mount(document.createElement("div"), model.dimensions(), (c) => model.getCell(c));
   const disconnect = connectModelToView(model, view);
-  const store = createStore();
+  const store = opts.store ?? createStore();
   const target = { doc, readOnly: opts.readOnly ?? false };
   const interaction = createGridInteraction({
     view,

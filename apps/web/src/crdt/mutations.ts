@@ -170,6 +170,40 @@ export function setFormat(
   });
 }
 
+/**
+ * One cell's new state. `data` and `format` are applied only when the key is present;
+ * `undefined` clears. Cells may be on different sheets (a cut that moves between sheets).
+ */
+export interface CellChange {
+  sheetId: string;
+  rowId: string;
+  colId: string;
+  data?: CellData | undefined;
+  format?: CellFormat | undefined;
+}
+
+/** Applies many cell changes (content and/or format) as ONE transaction, hence one undo step. */
+export function applyCellChanges(
+  doc: Y.Doc,
+  readOnly: boolean,
+  changes: readonly CellChange[],
+): boolean {
+  if (changes.length === 0) return false;
+  return transact(doc, readOnly, () => {
+    for (const change of changes) {
+      const { sheetId, rowId, colId } = change;
+      if (getSheetName(doc, sheetId) === undefined) continue;
+      if ("data" in change) setCell(doc, sheetId, rowId, colId, change.data);
+      if ("format" in change) {
+        const formats = getFormatsMap(doc, sheetId);
+        const key = cellKey(rowId, colId);
+        if (change.format && Object.keys(change.format).length > 0) formats.set(key, change.format);
+        else formats.delete(key);
+      }
+    }
+  });
+}
+
 export function useWorkbookMutations() {
   const { doc, readOnly } = useWorkbookDoc();
   return useMemo(

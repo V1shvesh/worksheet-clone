@@ -9,6 +9,7 @@ import {
   formatSheetPrefix,
   quoteSheetName,
   referencedSheetIds,
+  qualifyStoredFormula,
   shiftFormula,
   type DecodeContext,
   type EncodeContext,
@@ -584,5 +585,29 @@ describe("shiftFormula", () => {
         },
       ),
     );
+  });
+});
+
+describe("qualifyStoredFormula", () => {
+  it.each([
+    ["=[[r:a,c:b]]+1", "=[[s:S,r:a,c:b]]+1"],
+    ["=SUM([[r:a,c:b]]:[[r:c,c:d]])", "=SUM([[s:S,r:a,c:b]]:[[r:c,c:d]])"],
+    ["=[[s:T,r:a,c:b]]*[[c:z]]", "=[[s:T,r:a,c:b]]*[[s:S,c:z]]"],
+    ['="[[r:a,c:b]]"&[[$r:a,$c:b]]', '="[[r:a,c:b]]"&[[s:S,$r:a,$c:b]]'],
+    ["=1+2", "=1+2"],
+  ])("%s", (input, expected) => {
+    expect(qualifyStoredFormula(input, "S")).toBe(expected);
+  });
+
+  it("keeps meaning: decoding in another sheet gives the same cells as before", () => {
+    const stored = "=SUM([[r:r1,c:c2]]:[[r:r3,c:c2]])+[[r:r0,c:c0]]";
+    const ctx = (sheetId: string): DecodeContext => ({
+      sheetId,
+      lookup: () => identityLookup,
+      sheetPrefix: (id) => `${id}!`,
+    });
+    const before = decodeFormula(stored, ctx("s1"));
+    const moved = decodeFormula(qualifyStoredFormula(stored, "s1"), ctx("s2"));
+    expect(moved).toBe(before.replace(/([A-Z]+\d+)/g, "s1!$1").replace(/:s1!/, ":"));
   });
 });

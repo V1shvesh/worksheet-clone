@@ -1,6 +1,7 @@
 // The in-app clipboard payload, carried in the text/html flavor so a paste into
 // the same app keeps raw inputs (A1 formulas) and formats. Other apps just see
-// a <table> of the cell inputs.
+// a <table> of the DISPLAYED values (they prefer text/html on paste, and formula
+// text there would land as text or as unshifted formulas).
 
 export interface ClipFormat {
   bg?: string;
@@ -35,14 +36,20 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** The payload as an HTML table; the JSON rides in an escaped attribute of the table. */
-export function serializeClipboardHtml(payload: Omit<ClipboardPayload, "v">): string {
-  const json = JSON.stringify({ v: 1, ...payload });
-  const body = payload.cells
+/**
+ * The payload as an HTML table; the JSON (raw inputs) rides in an escaped attribute of the
+ * table, while each <td> shows `display` (what the cell shows), same shape as `cells`.
+ */
+export function serializeClipboardHtml(
+  payload: Omit<ClipboardPayload, "v"> & { display: string[][] },
+): string {
+  const { display, ...data } = payload;
+  const json = JSON.stringify({ v: 1, ...data });
+  const body = display
     .map(
       (row) =>
         `<tr>${row
-          .map((cell) => `<td>${escapeHtml(cell?.input ?? "").replaceAll("\n", "<br>")}</td>`)
+          .map((text) => `<td>${escapeHtml(text).replaceAll("\n", "<br>")}</td>`)
           .join("")}</tr>`,
     )
     .join("");

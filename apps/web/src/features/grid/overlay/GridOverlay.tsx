@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, type KeyboardEvent } fr
 import { useSelector } from "react-redux";
 import type { RootState } from "../../../app/store";
 import type { GridInteraction, IdMapper } from "../interaction";
-import { resolveSelection, type Direction } from "../interaction";
+import { resolveSelection, type Direction, type IdSelection } from "../interaction";
 import type { SheetViewModel } from "../model";
 import type { GridView, Rect } from "../port";
 import { visibleRangeRect } from "./geometry";
@@ -24,6 +24,7 @@ const px = (r: Rect) => ({ left: r.x, top: r.y, width: r.width, height: r.height
 export function GridOverlay({ view, model, controller, readOnly }: GridOverlayProps) {
   const selection = useSelector((s: RootState) => s.grid.selection);
   const editing = useSelector((s: RootState) => s.grid.editing);
+  const cutMark = useSelector((s: RootState) => s.clipboard.cutMark);
   // Geometry changes without any Redux change (scroll, resize, structure edits).
   const [, refresh] = useReducer((n: number) => n + 1, 0);
 
@@ -51,6 +52,12 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
   // The anchor is the active cell (Excel/Sheets); Shift+arrows move only the far corner.
   const activeRect = resolved && view.getCellRect(resolved.anchor);
 
+  // The cut mark is only drawn on the sheet it was cut from.
+  const markSelection: IdSelection | null =
+    cutMark && cutMark.sheetId === model.sheetId ? cutMark.range : null;
+  const markResolved = resolveSelection(markSelection, mapper);
+  const cutRect = markResolved && visibleRangeRect(view, markResolved.range);
+
   const editRow = editing ? model.rowIndexOf(editing.rowId) : undefined;
   const editCol = editing ? model.colIndexOf(editing.colId) : undefined;
   const editRect =
@@ -67,6 +74,7 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
           style={px(selectionRect)}
         />
       )}
+      {cutRect && <div className="grid-cut-rect" data-testid="cut-rect" style={px(cutRect)} />}
       {activeRect && (
         <div className="grid-active-cell" data-testid="active-cell" style={px(activeRect)} />
       )}

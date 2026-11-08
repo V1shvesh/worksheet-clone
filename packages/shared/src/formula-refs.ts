@@ -498,3 +498,43 @@ export function referencedSheetIds(stored: string): Set<string> {
   }
   return ids;
 }
+
+/**
+ * Makes every reference of a stored formula explicit about its sheet: tokens without `s:`
+ * (which mean "my own sheet") get `s:<sheetId>`. Used when a formula moves to another sheet
+ * unchanged (cut and paste), so it keeps pointing at the cells it pointed at. The second
+ * endpoint of a range inherits the first one's sheet and is left alone.
+ */
+export function qualifyStoredFormula(stored: string, sheetId: string): string {
+  let out = "";
+  let i = 0;
+  while (i < stored.length) {
+    const ch = stored[i] ?? "";
+    if (ch === '"' || ch === "'") {
+      const end = literalEnd(stored, i);
+      out += stored.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (ch === "[" && stored[i + 1] === "[") {
+      const first = readToken(stored, i);
+      if (first) {
+        const text = stored.slice(i, i + first.length);
+        out += first.ref.sheet === undefined ? `[[s:${sheetId},${text.slice(2)}` : text;
+        let end = i + first.length;
+        if (stored[end] === ":") {
+          const second = readToken(stored, end + 1);
+          if (second) {
+            out += stored.slice(end, end + 1 + second.length);
+            end += 1 + second.length;
+          }
+        }
+        i = end;
+        continue;
+      }
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}

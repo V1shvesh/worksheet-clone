@@ -86,6 +86,27 @@ export function GridContainer({
     };
   }, [doc, sheetId, engine, dispatch, store]);
 
+  // Native clipboard events, so no Clipboard API permission prompt. They bubble from the
+  // grid's focused container to the mount element; the cell editor and formula bar live
+  // outside it, so their native text copy/paste is untouched.
+  useEffect(() => {
+    const el = mountEl.current;
+    if (!el || !session) return;
+    const onClipboard = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      const handled =
+        e.type === "paste"
+          ? session.controller.paste(e.clipboardData)
+          : session.controller.copy(e.clipboardData, e.type === "cut");
+      if (handled) e.preventDefault();
+    };
+    const types = ["copy", "cut", "paste"] as const;
+    for (const type of types) el.addEventListener(type, onClipboard);
+    return () => {
+      for (const type of types) el.removeEventListener(type, onClipboard);
+    };
+  }, [session]);
+
   return (
     <div className="grid-container">
       {session && <FormulaBar {...session} readOnly={readOnly} />}

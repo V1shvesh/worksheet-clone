@@ -16,24 +16,16 @@ import { parseCellInput } from "./parse-cell-input";
 // outside the grid decodes to #REF! instead of pointing somewhere else.
 const MISSING_ID = "outside-grid";
 
-/** Applies what the user typed to one cell. Returns false if nothing was written. */
-export function setCellInput(
-  target: { doc: Y.Doc; readOnly: boolean },
-  sheetId: string,
-  coord: CellCoord,
-  raw: string,
-): boolean {
-  const { doc, readOnly } = target;
-  const rows = readRowOrder(doc, sheetId);
-  const cols = readColOrder(doc, sheetId);
-  const rowId = rows[coord.row];
-  const colId = cols[coord.col];
-  if (rowId === undefined || colId === undefined) return false;
-
+/**
+ * What typing `raw` into a cell of `sheetId` stores: a value, an id-based formula, or
+ * undefined (clear). Pure read of the doc; formulas pointing outside the grid become #REF!.
+ */
+export function encodeCellInput(doc: Y.Doc, sheetId: string, raw: string): CellData | undefined {
   const parsed = parseCellInput(raw);
-  let data: CellData | undefined;
   if (parsed.kind === "formula") {
-    data = {
+    const rows = readRowOrder(doc, sheetId);
+    const cols = readColOrder(doc, sheetId);
+    return {
       f: encodeFormula(parsed.a1, {
         sheetId,
         sheetIdByName: createSheetNameIndex(
@@ -46,8 +38,20 @@ export function setCellInput(
         },
       }),
     };
-  } else if (parsed.kind === "value") {
-    data = { v: parsed.value };
   }
-  return setCellContent(doc, readOnly, sheetId, rowId, colId, data);
+  return parsed.kind === "value" ? { v: parsed.value } : undefined;
+}
+
+/** Applies what the user typed to one cell. Returns false if nothing was written. */
+export function setCellInput(
+  target: { doc: Y.Doc; readOnly: boolean },
+  sheetId: string,
+  coord: CellCoord,
+  raw: string,
+): boolean {
+  const { doc, readOnly } = target;
+  const rowId = readRowOrder(doc, sheetId)[coord.row];
+  const colId = readColOrder(doc, sheetId)[coord.col];
+  if (rowId === undefined || colId === undefined) return false;
+  return setCellContent(doc, readOnly, sheetId, rowId, colId, encodeCellInput(doc, sheetId, raw));
 }

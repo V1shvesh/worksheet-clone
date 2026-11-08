@@ -250,3 +250,62 @@ describe("lifecycle", () => {
     remove.mockRestore();
   });
 });
+
+describe("native clipboard events", () => {
+  const clipboardEvent = (type: string, store: Record<string, string>) => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: {
+        getData: (t: string) => store[t] ?? "",
+        setData: (t: string, v: string) => {
+          store[t] = v;
+        },
+      },
+    });
+    return event;
+  };
+
+  it("copy and paste on the grid's mount are handled and default-prevented", () => {
+    const { view, doc, sheetId, container } = setup();
+    act(() => edit(doc, sheetId, 0, 0, { v: 4 }));
+    click(view, 0, 0);
+    const mount = container.querySelector(".grid-mount")!;
+    const data: Record<string, string> = {};
+    const copy = clipboardEvent("copy", data);
+    act(() => void mount.dispatchEvent(copy));
+    expect(copy.defaultPrevented).toBe(true);
+    expect(data["text/plain"]).toBe("4");
+
+    click(view, 3, 3);
+    const paste = clipboardEvent("paste", data);
+    act(() => void mount.dispatchEvent(paste));
+    expect(paste.defaultPrevented).toBe(true);
+    expect(view.displayedText({ row: 3, col: 3 })).toBe("4");
+  });
+
+  it("cut draws a dashed outline over the source until Escape", () => {
+    const { view, container } = setup();
+    click(view, 1, 1);
+    act(
+      () => void container.querySelector(".grid-mount")!.dispatchEvent(clipboardEvent("cut", {})),
+    );
+    const rect = view.getCellRect({ row: 1, col: 1 })!;
+    expect(px(screen.getByTestId("cut-rect"))).toEqual({
+      left: rect.x,
+      top: rect.y,
+      width: rect.width,
+      height: rect.height,
+    });
+    press(view, "Escape");
+    expect(screen.queryByTestId("cut-rect")).toBeNull();
+  });
+
+  it("is left to the browser while a cell is being edited", () => {
+    const { view, container } = setup();
+    click(view, 0, 0);
+    press(view, "a");
+    const copy = clipboardEvent("copy", {});
+    act(() => void container.querySelector(".grid-mount")!.dispatchEvent(copy));
+    expect(copy.defaultPrevented).toBe(false);
+  });
+});

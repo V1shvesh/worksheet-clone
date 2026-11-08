@@ -15,27 +15,38 @@ const payload: Omit<ClipboardPayload, "v"> = {
   ],
 };
 
+const display = [
+  ["14", ""],
+  ['He said "<b>hi</b>" & left\nline', "7"],
+];
+const html = (p: Omit<ClipboardPayload, "v"> = payload, d: string[][] = display) =>
+  serializeClipboardHtml({ ...p, display: d });
+
 describe("clipboard html", () => {
   it("round-trips the payload", () => {
-    expect(parseClipboardHtml(serializeClipboardHtml(payload))).toEqual({ v: 1, ...payload });
+    expect(parseClipboardHtml(html())).toEqual({ v: 1, ...payload });
   });
   it("round-trips arbitrary input text", () => {
     fc.assert(
       fc.property(fc.string({ unit: "binary" }), fc.boolean(), (input, cut) => {
         const p = { ...payload, cut, cells: [[{ input }]] };
-        expect(parseClipboardHtml(serializeClipboardHtml(p))?.cells).toEqual(p.cells);
+        expect(parseClipboardHtml(html(p, [[input]]))?.cells).toEqual(p.cells);
       }),
     );
   });
-  it("renders escaped cell text for other apps", () => {
-    const html = serializeClipboardHtml(payload);
-    expect(html).toContain("<td>=A1*2</td>");
-    expect(html).toContain("&lt;b&gt;hi&lt;/b&gt;");
-    expect(html).toContain("<br>");
-    expect(html).toContain("<td></td>");
+  it("shows displayed values, not formulas, in the visible cells", () => {
+    const out = html();
+    const visible = out.slice(out.indexOf("<tbody>"));
+    expect(visible).toContain("<td>14</td>");
+    expect(visible).not.toContain("=A1*2");
+    expect(visible).toContain("&lt;b&gt;hi&lt;/b&gt;");
+    expect(visible).toContain("<br>");
+    expect(visible).toContain("<td></td>");
+    // the raw input still travels in the JSON attribute
+    expect(parseClipboardHtml(out)?.cells[0]?.[0]?.input).toBe("=A1*2");
   });
   it("survives the browser's paste wrapper", () => {
-    const wrapped = `<html><body><!--StartFragment-->${serializeClipboardHtml(payload)}<!--EndFragment--></body></html>`;
+    const wrapped = `<html><body><!--StartFragment-->${html()}<!--EndFragment--></body></html>`;
     expect(parseClipboardHtml(wrapped)?.cells).toEqual(payload.cells);
   });
   it("returns undefined for foreign or broken html without throwing", () => {
