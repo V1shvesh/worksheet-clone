@@ -8,7 +8,6 @@ import {
   migrateWorkbook,
   type CollabNotice,
 } from "@worksheet-clone/shared";
-import { describeDbError } from "../logging.js";
 import {
   loadDocumentState,
   snapshotIfDue as defaultSnapshotIfDue,
@@ -111,7 +110,9 @@ export function persistenceExtension(
       unsaved.set(workbookId, entry);
       entry.attempts += 1;
       log.error(
-        { err: describeDbError(error), workbookId, attempt: entry.attempts },
+        // Pass the error itself: the logger's `err` serializer reduces Drizzle query errors to
+        // the driver's cause (no parameters). A pre-reduced object would lose its reason there.
+        { err: error, workbookId, attempt: entry.attempts },
         "storing a workbook document failed; keeping it in memory and retrying",
       );
       if (!entry.notified) {

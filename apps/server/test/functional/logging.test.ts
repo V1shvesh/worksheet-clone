@@ -4,6 +4,8 @@ import { buildApp } from "../../src/app.js";
 import { pool } from "../../src/db/client.js";
 import { createWorkbook } from "../../src/domain/workbooks.js";
 import { describeDbError } from "../../src/logging.js";
+import { persistenceExtension } from "../../src/realtime/persistence.js";
+import * as Y from "yjs";
 import { connectCollab, waitFor } from "../helpers/collab.js";
 import { cleanupByEmailPattern, testEmails } from "../helpers/db.js";
 import { signupClient } from "../helpers/http.js";
@@ -48,6 +50,44 @@ describe("describeDbError (and the err serializer)", () => {
 });
 
 describe("log redaction", () => {
+  it("a failed document store logs the database's reason, never the parameters", async () => {
+    const drizzle = Object.assign(
+      new Error('Failed query: insert into "yjs_documents"\nparams: SECRET-DOC-BYTES'),
+      {
+        query: 'insert into "yjs_documents"',
+        params: ["SECRET-DOC-BYTES"],
+        cause: Object.assign(new Error('relation "yjs_documents" does not exist'), {
+          code: "42P01",
+        }),
+      },
+    );
+    const extension = persistenceExtension(app.log, {
+      store: async () => {
+        throw drizzle;
+      },
+      snapshotIfDue: async () => false,
+      retryDelayMs: () => 60_000,
+    });
+    const document = Object.assign(new Y.Doc(), {
+      broadcastStateless: () => {},
+      saveMutex: { runExclusive: <T>(fn: () => T) => fn() },
+    });
+    await extension.onStoreDocument?.({
+      document,
+      documentName: "wb-log-probe",
+      instance: { documents: new Map([["wb-log-probe", document]]) },
+    } as never);
+    const record = records().find(
+      (r) => r.workbookId === "wb-log-probe" && String(r.msg).startsWith("storing a workbook"),
+    );
+    expect(record?.err).toMatchObject({
+      message: 'relation "yjs_documents" does not exist',
+      code: "42P01",
+    });
+    expect(JSON.stringify(record)).not.toContain("SECRET-DOC-BYTES");
+    await extension.flushForShutdown?.();
+  });
+
   it("reduces a logged Drizzle query error to the driver cause (no query parameters)", () => {
     const drizzle = Object.assign(
       new Error('Failed query: select from "sessions"\nparams: SESSION-ID-IN-PARAMS'),
