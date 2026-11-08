@@ -65,7 +65,7 @@ export function registerWorkbookRoutes(app: FastifyInstance): void {
     scope.delete("/api/workbooks/:id", async (request, reply) => {
       const { id } = parseOrThrow(workbookParamsSchema, request.params, "NOT_FOUND");
       await deleteWorkbook(currentUser(request).id, id);
-      revokeAllAccess(app.collab, id);
+      revokeAllAccess(app.collab, id, request.log);
       return reply.code(204).send();
     });
   });

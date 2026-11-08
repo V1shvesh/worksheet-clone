@@ -31,14 +31,14 @@ export function registerMemberRoutes(app: FastifyInstance): void {
       const { id, userId } = parseOrThrow(memberParamsSchema, request.params, "NOT_FOUND");
       const { role } = parseOrThrow(changeRoleSchema, request.body);
       const member = await changeMemberRole(currentUser(request).id, id, userId, role);
-      revokeUserAccess(app.collab, id, userId);
+      revokeUserAccess(app.collab, id, userId, request.log);
       return { member };
     });
 
     scope.delete("/api/workbooks/:id/members/:userId", async (request, reply) => {
       const { id, userId } = parseOrThrow(memberParamsSchema, request.params, "NOT_FOUND");
       await removeMember(currentUser(request).id, id, userId);
-      revokeUserAccess(app.collab, id, userId);
+      revokeUserAccess(app.collab, id, userId, request.log);
       return reply.code(204).send();
     });
   });

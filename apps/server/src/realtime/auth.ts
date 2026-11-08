@@ -22,7 +22,11 @@ export interface CookieReader {
 // message is left empty on purpose: Hocuspocus console.errors any hook error
 // with a message, and a denied connection is routine, not an error.
 export class CollabAuthError extends Error {
-  constructor(readonly reason: "unauthorized" | "forbidden") {
+  constructor(
+    readonly reason: "unauthorized" | "forbidden",
+    /** Known once the session resolved; for logs only, never sent to the client. */
+    readonly userId?: string,
+  ) {
     super("");
   }
 }
@@ -45,7 +49,7 @@ export async function authorizeCollabConnection(
 
   // Document names are workbook ids; anything else can't be a workbook.
   if (!workbookParamsSchema.safeParse({ id: documentName }).success) {
-    throw new CollabAuthError("forbidden");
+    throw new CollabAuthError("forbidden", user.id);
   }
 
   let role: Role;
@@ -53,7 +57,7 @@ export async function authorizeCollabConnection(
     role = await requireMemberRole(documentName, user.id);
   } catch (error) {
     if (error instanceof DomainError && error.code === "NOT_FOUND") {
-      throw new CollabAuthError("forbidden");
+      throw new CollabAuthError("forbidden", user.id);
     }
     throw error;
   }

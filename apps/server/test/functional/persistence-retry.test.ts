@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Hocuspocus } from "@hocuspocus/server";
 import * as Y from "yjs";
 import { createEmptyWorkbook } from "@worksheet-clone/shared";
-import {
-  defaultRetryDelayMs,
-  describeStoreError,
-  persistenceExtension,
-} from "../../src/realtime/persistence.js";
+import { defaultRetryDelayMs, persistenceExtension } from "../../src/realtime/persistence.js";
 
 // Drives the extension's hooks directly with a fake Hocuspocus instance, so
 // backoff timing can be checked with fake timers. The real Hocuspocus
@@ -70,26 +66,6 @@ describe("defaultRetryDelayMs", () => {
     expect([1, 2, 3, 4, 5, 6, 7, 20].map(defaultRetryDelayMs)).toEqual([
       1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000,
     ]);
-  });
-});
-
-describe("describeStoreError", () => {
-  it("never includes the query parameters (the document bytes)", () => {
-    const drizzle = Object.assign(
-      new Error('Failed query: insert into "yjs_documents"\nparams: secret-cell-content'),
-      {
-        cause: Object.assign(new Error('relation "yjs_documents" does not exist'), {
-          code: "42P01",
-        }),
-      },
-    );
-    const described = describeStoreError(drizzle);
-    expect(described).toEqual({
-      name: "Error",
-      code: "42P01",
-      reason: 'relation "yjs_documents" does not exist',
-    });
-    expect(JSON.stringify(describeStoreError(new Error("a\nsecret")))).not.toContain("secret");
   });
 });
 

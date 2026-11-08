@@ -65,10 +65,23 @@ export function mountCollab(app: FastifyInstance, extensions: Extension[] = []):
           documentName,
         );
         connectionConfig.readOnly = decision.readOnly;
+        app.log.info(
+          {
+            workbookId: documentName,
+            userId: decision.context.userId,
+            role: decision.context.role,
+          },
+          "collab connection authorized",
+        );
         return decision.context;
       } catch (error) {
-        if (!(error instanceof CollabAuthError)) {
-          app.log.error({ err: error, documentName }, "collab authentication failed");
+        if (error instanceof CollabAuthError) {
+          app.log.info(
+            { workbookId: documentName, userId: error.userId, reason: error.reason },
+            "collab connection refused",
+          );
+        } else {
+          app.log.error({ err: error, workbookId: documentName }, "collab authentication failed");
         }
         throw error instanceof CollabAuthError ? error : new CollabAuthError("forbidden");
       }

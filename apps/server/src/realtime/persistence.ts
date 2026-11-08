@@ -8,6 +8,7 @@ import {
   migrateWorkbook,
   type CollabNotice,
 } from "@worksheet-clone/shared";
+import { describeDbError } from "../logging.js";
 import {
   loadDocumentState,
   snapshotIfDue as defaultSnapshotIfDue,
@@ -24,29 +25,6 @@ export interface PersistenceOptions {
   snapshotIfDue?: (workbookId: string, state: Uint8Array) => Promise<boolean>;
   /** Delay before retry number `attempt` (1-based) after a failed store. */
   retryDelayMs?: (attempt: number) => number;
-}
-
-/**
- * What to log about a failed store. Drizzle's error message embeds the query
- * parameters, i.e. the whole binary document (workbook content), so only the
- * driver's cause is logged: its Postgres code and first message line.
- */
-export function describeStoreError(error: unknown): {
-  name: string;
-  code?: string;
-  reason: string;
-} {
-  const cause = (error as { cause?: unknown } | null)?.cause ?? error;
-  const { name, code, message } = (cause ?? {}) as {
-    name?: unknown;
-    code?: unknown;
-    message?: unknown;
-  };
-  return {
-    name: typeof name === "string" ? name : "Error",
-    ...(typeof code === "string" ? { code } : {}),
-    reason: (typeof message === "string" ? message : "unknown error").split("\n")[0]!.slice(0, 200),
-  };
 }
 
 /** 1s, 2s, 4s, ... capped at 30s. */
@@ -133,7 +111,7 @@ export function persistenceExtension(
       unsaved.set(workbookId, entry);
       entry.attempts += 1;
       log.error(
-        { err: describeStoreError(error), workbookId, attempt: entry.attempts },
+        { err: describeDbError(error), workbookId, attempt: entry.attempts },
         "storing a workbook document failed; keeping it in memory and retrying",
       );
       if (!entry.notified) {
@@ -185,6 +163,7 @@ export function persistenceExtension(
 
     async onLoadDocument({ document, documentName, instance: hocuspocus }) {
       instance = hocuspocus;
+      log.info({ workbookId: documentName }, "workbook document loading");
       const state = await loadDocumentState(documentName);
       if (state) {
         Y.applyUpdate(document, state);
@@ -244,6 +223,7 @@ export function persistenceExtension(
 
     async afterUnloadDocument({ documentName }) {
       clear(documentName);
+      log.info({ workbookId: documentName }, "workbook document unloaded");
     },
 
     unsavedDocuments: () => [...unsaved.keys()],

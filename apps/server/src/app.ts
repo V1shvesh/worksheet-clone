@@ -8,6 +8,7 @@ import { registerHealthRoute } from "./http/health.js";
 import { registerMemberRoutes } from "./http/members.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
+import { buildLoggerOptions } from "./logging.js";
 import { mountCollab } from "./realtime/collab.js";
 import { sheetRenameNoticeExtension } from "./realtime/notices.js";
 import { persistenceExtension, type PersistenceOptions } from "./realtime/persistence.js";
@@ -22,10 +23,12 @@ const webDistDir =
 export interface BuildAppOptions {
   /** Test seams (failing store, short retry delays); production passes none. */
   persistence?: PersistenceOptions;
+  /** Test seam: capture log lines (default: stdout). */
+  logStream?: { write(message: string): void };
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: buildLoggerOptions(options.logStream) });
 
   // Must come before any register() so encapsulated route plugins inherit it.
   registerErrorHandler(app);
