@@ -137,8 +137,8 @@ Never bypass hooks with `--no-verify`. A change is done only when the relevant t
 - [x] M2 — Workbooks + ACL
 - [x] M3 — Realtime document backbone
 - [x] M4a — Grid port + view model + formula engine (no AG Grid)
-- [ ] M4b — AG Grid Community adapter + selection/keyboard/editor ← **next**
-- [ ] M5 — Sheet tabs
+- [x] M4b — AG Grid Community adapter + selection/keyboard/editor
+- [ ] M5 — Sheet tabs ← **next**
 - [ ] M6 — Formatting, formula bar, undo/redo, clipboard, fill handle
 - [ ] M7 — Row/column structure ops
 - [ ] M8 — Resilience: errors, offline, rollback, presence
