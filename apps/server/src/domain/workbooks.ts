@@ -67,23 +67,40 @@ export async function createWorkbook(userId: string, name: string): Promise<Work
   });
 }
 
+export interface RenamedWorkbook extends WorkbookWithRole {
+  /** The name before this rename, read in the same transaction as the update. */
+  previousName: string;
+}
+
 export async function renameWorkbook(
   userId: string,
   workbookId: string,
   name: string,
-): Promise<WorkbookWithRole> {
+): Promise<RenamedWorkbook> {
   const role = await requireMemberRole(workbookId, userId);
   assertCan(role, "workbook:rename");
 
-  const [workbook] = await db
-    .update(workbooks)
-    .set({ name, updatedAt: sql`now()` })
-    .where(eq(workbooks.id, workbookId))
-    .returning();
-  if (!workbook) {
-    throw new DomainError("NOT_FOUND", "Workbook not found");
-  }
-  return { ...workbook, role };
+  // Lock the row while reading the old name so two concurrent renames each
+  // report the name they actually replaced.
+  return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ name: workbooks.name })
+      .from(workbooks)
+      .where(eq(workbooks.id, workbookId))
+      .for("update");
+    if (!before) {
+      throw new DomainError("NOT_FOUND", "Workbook not found");
+    }
+    const [workbook] = await tx
+      .update(workbooks)
+      .set({ name, updatedAt: sql`now()` })
+      .where(eq(workbooks.id, workbookId))
+      .returning();
+    if (!workbook) {
+      throw new DomainError("NOT_FOUND", "Workbook not found");
+    }
+    return { ...workbook, role, previousName: before.name };
+  });
 }
 
 export async function deleteWorkbook(userId: string, workbookId: string): Promise<void> {

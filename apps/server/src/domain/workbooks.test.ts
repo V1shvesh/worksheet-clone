@@ -67,6 +67,7 @@ describe("workbooks", () => {
 
     const renamed = await renameWorkbook(owner.id, workbook.id, "New name");
     expect(renamed.name).toBe("New name");
+    expect(renamed.previousName).toBe("Old name");
     expect(renamed.updatedAt.getTime()).toBeGreaterThanOrEqual(workbook.updatedAt.getTime());
 
     await deleteWorkbook(owner.id, workbook.id);

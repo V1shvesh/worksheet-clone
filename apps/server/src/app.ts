@@ -9,6 +9,7 @@ import { registerMemberRoutes } from "./http/members.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
 import { mountCollab } from "./realtime/collab.js";
+import { sheetRenameNoticeExtension } from "./realtime/notices.js";
 import { persistenceExtension } from "./realtime/persistence.js";
 
 // In the monorepo (and the pre-pack Docker build stage), apps/web/dist sits
@@ -28,7 +29,7 @@ export function buildApp(): FastifyInstance {
   registerAuthRoutes(app);
   registerWorkbookRoutes(app);
   registerMemberRoutes(app);
-  mountCollab(app, [persistenceExtension(app.log)]);
+  mountCollab(app, [persistenceExtension(app.log), sheetRenameNoticeExtension()]);
 
   const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
   if (serveSpa) {

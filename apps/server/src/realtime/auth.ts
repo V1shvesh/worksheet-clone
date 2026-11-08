@@ -7,6 +7,8 @@ import { requireMemberRole } from "../domain/workbooks.js";
 
 export interface CollabContext {
   userId: string;
+  /** Server-resolved from the session; used to attribute collab notices. */
+  email: string;
   role: Role;
 }
 
@@ -57,7 +59,7 @@ export async function authorizeCollabConnection(
   }
 
   return {
-    context: { userId: user.id, role },
+    context: { userId: user.id, email: user.email, role },
     readOnly: !can(role, "content:edit"),
   };
 }

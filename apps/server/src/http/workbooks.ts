@@ -14,6 +14,7 @@ import {
   type WorkbookWithRole,
 } from "../domain/workbooks.js";
 import { revokeAllAccess } from "../realtime/access.js";
+import { broadcastWorkbookRenamed } from "../realtime/notices.js";
 import { parseOrThrow } from "./errors.js";
 import { currentUser, requireUser } from "./session.js";
 
@@ -53,7 +54,12 @@ export function registerWorkbookRoutes(app: FastifyInstance): void {
     scope.patch("/api/workbooks/:id", async (request) => {
       const { id } = parseOrThrow(workbookParamsSchema, request.params, "NOT_FOUND");
       const { name } = parseOrThrow(renameWorkbookSchema, request.body);
-      return { workbook: toSummary(await renameWorkbook(currentUser(request).id, id, name)) };
+      const user = currentUser(request);
+      const renamed = await renameWorkbook(user.id, id, name);
+      if (renamed.previousName !== renamed.name) {
+        broadcastWorkbookRenamed(app.collab, id, user, renamed.previousName, renamed.name);
+      }
+      return { workbook: toSummary(renamed) };
     });
 
     scope.delete("/api/workbooks/:id", async (request, reply) => {

@@ -8,6 +8,8 @@ import {
   readSheetOrder,
   setCell,
   setSheetName,
+  parseCollabNotice,
+  type CollabNotice,
   type WorkbookSummary,
 } from "@worksheet-clone/shared";
 import { connectCollab, waitFor, type CollabClient } from "../helpers/collab.js";
@@ -173,5 +175,115 @@ describe("realtime collaboration (real server, real Postgres)", { timeout: 30_00
     expect(readSheetOrder(reopened.doc)).toEqual([repaired]);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(readSheetOrder(reopened.doc)).toEqual([repaired]);
+  });
+
+  describe("rename notices", () => {
+    function collectNotices(client: CollabClient): CollabNotice[] {
+      const notices: CollabNotice[] = [];
+      client.provider.on("stateless", ({ payload }: { payload: string }) => {
+        const notice = parseCollabNotice(payload);
+        if (notice) notices.push(notice);
+      });
+      return notices;
+    }
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
+
+    async function trio() {
+      const owner = await newUser("owner");
+      const editor = await newUser("editor");
+      const viewer = await newUser("viewer");
+      const workbookId = await createWorkbook(owner, "Old");
+      await share(owner, workbookId, editor, "editor");
+      await share(owner, workbookId, viewer, "viewer");
+      return { owner, editor, viewer, workbookId };
+    }
+
+    it("tells editor and viewer once when the owner renames the workbook over REST", async () => {
+      const { owner, editor, viewer, workbookId } = await trio();
+      const e = await open(editor, workbookId);
+      const v = await open(viewer, workbookId);
+      const editorNotices = collectNotices(e);
+      const viewerNotices = collectNotices(v);
+
+      const noop = await owner.request("PATCH", `/api/workbooks/${workbookId}`, { name: "Old" });
+      expect(noop.status).toBe(200);
+      const response = await owner.request("PATCH", `/api/workbooks/${workbookId}`, {
+        name: "New",
+      });
+      expect(response.status).toBe(200);
+      expect(((await response.json()) as { workbook: WorkbookSummary }).workbook.name).toBe("New");
+
+      await waitFor(() => editorNotices.length > 0 && viewerNotices.length > 0);
+      await settle();
+      const me = (await (await owner.request("GET", "/api/auth/me")).json()) as {
+        user: { id: string; email: string };
+      };
+      const expected = {
+        type: "workbookRenamed",
+        by: { userId: me.user.id, email: owner.email },
+        from: "Old",
+        to: "New",
+      };
+      expect(editorNotices).toEqual([expected]);
+      expect(viewerNotices).toEqual([expected]);
+    });
+
+    it("attributes a sheet rename to the editor who made it", async () => {
+      const { owner, editor, workbookId } = await trio();
+      const a = await open(owner, workbookId);
+      const b = await open(editor, workbookId);
+      const ownerNotices = collectNotices(a);
+      const editorNotices = collectNotices(b);
+      const [sheetId = ""] = readSheetOrder(a.doc);
+      const before = getSheetName(a.doc, sheetId);
+
+      setSheetName(b.doc, sheetId, "Budget");
+
+      await waitFor(() => ownerNotices.length > 0);
+      await settle();
+      const me = (await (await editor.request("GET", "/api/auth/me")).json()) as {
+        user: { id: string };
+      };
+      const expected = {
+        type: "sheetRenamed",
+        by: { userId: me.user.id, email: editor.email },
+        sheetId,
+        from: before,
+        to: "Budget",
+      };
+      expect(ownerNotices).toEqual([expected]);
+      // The sender receives its own notice too; clients filter by `by.userId`.
+      expect(editorNotices).toEqual([expected]);
+    });
+
+    it("drops a viewer's rename and sends no notice", async () => {
+      const { owner, viewer, workbookId } = await trio();
+      const a = await open(owner, workbookId);
+      const v = await open(viewer, workbookId);
+      const ownerNotices = collectNotices(a);
+      const [sheetId = ""] = readSheetOrder(a.doc);
+      const before = getSheetName(a.doc, sheetId);
+
+      setSheetName(v.doc, sheetId, "Hacked");
+      await settle();
+
+      expect(getSheetName(a.doc, sheetId)).toBe(before);
+      expect(ownerNotices).toEqual([]);
+    });
+
+    it("sends no notice when a sheet is added or deleted", async () => {
+      const { owner, editor, workbookId } = await trio();
+      const a = await open(owner, workbookId);
+      const b = await open(editor, workbookId);
+      const ownerNotices = collectNotices(a);
+
+      const added = addSheet(b.doc, "Extra");
+      await waitFor(() => readSheetOrder(a.doc).includes(added));
+      deleteSheet(b.doc, added);
+      await waitFor(() => !readSheetOrder(a.doc).includes(added));
+      await settle();
+
+      expect(ownerNotices).toEqual([]);
+    });
   });
 });
