@@ -166,6 +166,7 @@ describe("pointer interaction", () => {
       selection: null,
       editing: null,
       restore: null,
+      fillPreview: null,
     });
   });
 });
