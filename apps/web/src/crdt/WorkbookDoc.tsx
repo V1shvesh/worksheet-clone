@@ -1,8 +1,10 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import * as Y from "yjs";
 import type { RootState } from "../app/store";
+import { handleCollabNotice } from "./handleCollabNotice";
+import { authApi } from "../features/auth/authApi";
 import { collabActions } from "./collabSlice";
 
 interface WorkbookDocValue {
@@ -29,6 +31,7 @@ export function WorkbookDocProvider({
   children: ReactNode;
 }) {
   const dispatch = useDispatch();
+  const store = useStore<RootState>();
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const access = useSelector((state: RootState) => state.collab.access);
 
@@ -45,6 +48,12 @@ export function WorkbookDocProvider({
       onAuthenticated: ({ scope }) =>
         dispatch(collabActions.accessChanged(scope === "read-write" ? "read-write" : "read-only")),
       onAuthenticationFailed: () => dispatch(collabActions.accessChanged("denied")),
+      onStateless: ({ payload }) =>
+        handleCollabNotice(payload, {
+          workbookId,
+          dispatch,
+          currentUserId: () => authApi.endpoints.me.select()(store.getState()).data?.user.id,
+        }),
     });
     setDoc(ydoc);
 
@@ -54,7 +63,7 @@ export function WorkbookDocProvider({
       setDoc(null);
       dispatch(collabActions.closed());
     };
-  }, [workbookId, dispatch]);
+  }, [workbookId, dispatch, store]);
 
   if (!doc) {
     return null;

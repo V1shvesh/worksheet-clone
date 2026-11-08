@@ -15,6 +15,7 @@ interface FakeProviderConfig {
   onSynced: (e: { state: boolean }) => void;
   onAuthenticated: (e: { scope: string }) => void;
   onAuthenticationFailed: (e: { reason: string }) => void;
+  onStateless: (e: { payload: string }) => void;
 }
 const providers: { config: FakeProviderConfig; destroy: ReturnType<typeof vi.fn> }[] = [];
 vi.mock("@hocuspocus/provider", () => ({
@@ -27,6 +28,7 @@ vi.mock("@hocuspocus/provider", () => ({
 }));
 
 const { createStore } = await import("../app/store");
+const { authApi } = await import("../features/auth/authApi");
 const { WorkbookDocProvider, collabUrl, useWorkbookDoc } = await import("./WorkbookDoc");
 const { useDocValue, useSheetName, useSheetOrder, shallowEqualArrays } =
   await import("./useDocValue");
@@ -169,6 +171,32 @@ describe("WorkbookDocProvider", () => {
     const [serverDoc] = seededDoc();
     act(() => doc && Y.applyUpdate(doc, Y.encodeStateAsUpdate(serverDoc)));
     expect(screen.getByText(/Sheet1/)).toBeInTheDocument();
+  });
+
+  it("turns other users' notices into toasts and ignores the rest", async () => {
+    const store = createStore();
+    await store.dispatch(
+      authApi.util.upsertQueryData("me", undefined, { user: { id: "u1", email: "me@x.com" } }),
+    );
+    renderWith("wb-1", store);
+    const { onStateless } = providers.at(-1)?.config ?? {};
+    const notice = (userId: string, email: string) =>
+      JSON.stringify({
+        type: "sheetRenamed",
+        by: { userId, email },
+        sheetId: "s",
+        from: "Sheet2",
+        to: "Budget",
+      });
+
+    act(() => onStateless?.({ payload: notice("u2", "bob@x.com") }));
+    act(() => onStateless?.({ payload: notice("u1", "me@x.com") }));
+    act(() => onStateless?.({ payload: "not json" }));
+    act(() => onStateless?.({ payload: JSON.stringify({ type: "other" }) }));
+
+    expect(store.getState().toasts.items.map((t) => t.message)).toEqual([
+      '@bob renamed sheet "Sheet2" to "Budget"',
+    ]);
   });
 
   it("tears down on unmount and when switching workbooks", () => {

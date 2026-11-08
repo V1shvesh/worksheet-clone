@@ -1,6 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { collabSlice } from "../crdt/collabSlice";
 import { gridSlice } from "../features/grid/gridSlice";
+import { toastsSlice } from "../features/toasts/toastsSlice";
 import { api } from "./api";
 
 export function createStore() {
@@ -9,6 +10,7 @@ export function createStore() {
       [api.reducerPath]: api.reducer,
       [collabSlice.name]: collabSlice.reducer,
       [gridSlice.name]: gridSlice.reducer,
+      [toastsSlice.name]: toastsSlice.reducer,
     },
     middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(api.middleware),
   });
