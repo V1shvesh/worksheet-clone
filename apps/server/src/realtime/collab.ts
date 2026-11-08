@@ -7,6 +7,12 @@ import { SESSION_COOKIE_NAME } from "../http/session.js";
 import { authorizeCollabConnection, CollabAuthError, type CollabContext } from "./auth.js";
 
 export const COLLAB_PATH = "/collab";
+const SHUTDOWN_BOUND_MS = 5_000;
+
+interface ShutdownFlush {
+  unsavedDocuments(): string[];
+  flushForShutdown(): Promise<string[]>;
+}
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -123,11 +129,37 @@ export function mountCollab(app: FastifyInstance, extensions: Extension[] = []):
   // bounded, for that. This must be preClose: onClose hooks only run after
   // the HTTP server has finished closing, which is what these open sockets
   // block — a deadlock.
+  // A document whose store keeps failing stays in memory (persistence.ts), so
+  // it never reaches zero: stop waiting for those, give each one last store
+  // attempt, and say loudly what could not be saved. Bounded either way.
+  const persistence = extensions.find(
+    (extension): extension is Extension & ShutdownFlush =>
+      typeof (extension as Partial<ShutdownFlush>).flushForShutdown === "function",
+  );
   app.addHook("preClose", async () => {
     ws.closeAll(1001, "server shutting down");
-    const deadline = Date.now() + 5_000;
-    while (hocuspocus.getDocumentsCount() > 0 && Date.now() < deadline) {
+    const deadline = Date.now() + SHUTDOWN_BOUND_MS;
+    const stuck = () => new Set(persistence?.unsavedDocuments() ?? []);
+    const settling = () => [...hocuspocus.documents.keys()].filter((name) => !stuck().has(name));
+    while (settling().length > 0 && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    if (persistence && persistence.unsavedDocuments().length > 0) {
+      const remaining = Math.max(deadline - Date.now(), 1_000);
+      let giveUp: ReturnType<typeof setTimeout> | undefined;
+      const lost = await Promise.race([
+        persistence.flushForShutdown(),
+        new Promise<string[]>((resolve) => {
+          giveUp = setTimeout(() => resolve(persistence.unsavedDocuments()), remaining);
+        }),
+      ]);
+      clearTimeout(giveUp);
+      for (const workbookId of lost) {
+        app.log.error(
+          { workbookId },
+          "shutting down with UNSAVED changes: the database kept refusing this workbook's document",
+        );
+      }
     }
   });
 

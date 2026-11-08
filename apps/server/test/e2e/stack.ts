@@ -1,10 +1,13 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import type { BuildAppOptions } from "../../src/app.js";
 
 export interface Stack {
   readonly baseUrl: string;
   readonly server: FastifyInstance;
+  /** The app's own pool, for tests that break or inspect the database. */
+  readonly pool: Pool;
   /** Stops the server (flushing open docs) and starts a fresh one on the same database. */
   restartServer: () => Promise<void>;
   stop: () => Promise<void>;
@@ -13,7 +16,7 @@ export interface Stack {
 // Real server on a random port + a throwaway Postgres. db/client reads
 // DATABASE_URL at import time, so everything that touches it is imported
 // dynamically after the env var is set.
-export async function startStack(): Promise<Stack> {
+export async function startStack(appOptions: BuildAppOptions = {}): Promise<Stack> {
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer("postgres:17-alpine")
     .withDatabase("worksheet")
     .withUsername("worksheet")
@@ -28,7 +31,7 @@ export async function startStack(): Promise<Stack> {
 
   const { buildApp } = await import("../../src/app.js");
   async function listen(): Promise<{ server: FastifyInstance; baseUrl: string }> {
-    const server = buildApp();
+    const server = buildApp(appOptions);
     await server.listen({ port: 0, host: "127.0.0.1" });
     const address = server.server.address();
     const port = typeof address === "object" && address ? address.port : 0;
@@ -40,6 +43,7 @@ export async function startStack(): Promise<Stack> {
     get baseUrl() {
       return current.baseUrl;
     },
+    pool,
     get server() {
       return current.server;
     },

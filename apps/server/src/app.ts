@@ -10,7 +10,7 @@ import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
 import { mountCollab } from "./realtime/collab.js";
 import { sheetRenameNoticeExtension } from "./realtime/notices.js";
-import { persistenceExtension } from "./realtime/persistence.js";
+import { persistenceExtension, type PersistenceOptions } from "./realtime/persistence.js";
 
 // In the monorepo (and the pre-pack Docker build stage), apps/web/dist sits
 // two levels up from this file. The final Docker runtime stage copies that
@@ -19,7 +19,12 @@ import { persistenceExtension } from "./realtime/persistence.js";
 const webDistDir =
   process.env.WEB_DIST_DIR ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
 
-export function buildApp(): FastifyInstance {
+export interface BuildAppOptions {
+  /** Test seams (failing store, short retry delays); production passes none. */
+  persistence?: PersistenceOptions;
+}
+
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: true });
 
   // Must come before any register() so encapsulated route plugins inherit it.
@@ -29,7 +34,10 @@ export function buildApp(): FastifyInstance {
   registerAuthRoutes(app);
   registerWorkbookRoutes(app);
   registerMemberRoutes(app);
-  mountCollab(app, [persistenceExtension(app.log), sheetRenameNoticeExtension()]);
+  mountCollab(app, [
+    persistenceExtension(app.log, options.persistence),
+    sheetRenameNoticeExtension(),
+  ]);
 
   const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
   if (serveSpa) {
