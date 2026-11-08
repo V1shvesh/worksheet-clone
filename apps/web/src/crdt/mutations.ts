@@ -3,12 +3,16 @@ import type * as Y from "yjs";
 import {
   addSheet as addSheetToDoc,
   cellKey,
+  deleteCols as deleteColsInDoc,
+  deleteRows as deleteRowsInDoc,
   deleteSheet as deleteSheetFromDoc,
   getColWidthsMap,
   getFormatsMap,
   getRowHeightsMap,
   getSheetName,
   hasOtherVisibleSheet,
+  insertCols as insertColsInDoc,
+  insertRows as insertRowsInDoc,
   isSheetHidden,
   isSheetNameTaken,
   moveSheet as moveSheetInDoc,
@@ -248,6 +252,90 @@ export function setRowHeight(
   const heights = getRowHeightsMap(doc, sheetId);
   if (heights.get(rowId) === next) return false;
   return transact(doc, readOnly, () => heights.set(rowId, next));
+}
+
+/** Outcome of a row/column insert or delete; `limit` and `last` carry what the user should be told. */
+export type StructureResult =
+  { ok: true; ids: string[] } | { ok: false; reason: "readOnly" | "notFound" | "limit" | "last" };
+
+function insertAxis(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  at: number,
+  count: number,
+  insert: typeof insertRowsInDoc,
+): StructureResult {
+  if (readOnly) return { ok: false, reason: "readOnly" };
+  if (getSheetName(doc, sheetId) === undefined) return { ok: false, reason: "notFound" };
+  let ids: string[] | null = null;
+  doc.transact(() => {
+    ids = insert(doc, sheetId, at, count);
+  }, LOCAL_ORIGIN);
+  return ids ? { ok: true, ids } : { ok: false, reason: "limit" };
+}
+
+/** Inserts `count` rows so the first sits at visual index `at`, in one transaction (one undo step). */
+export function insertRows(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  at: number,
+  count: number,
+): StructureResult {
+  return insertAxis(doc, readOnly, sheetId, at, count, insertRowsInDoc);
+}
+
+/** Column counterpart of {@link insertRows}. */
+export function insertCols(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  at: number,
+  count: number,
+): StructureResult {
+  return insertAxis(doc, readOnly, sheetId, at, count, insertColsInDoc);
+}
+
+function deleteAxis(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  ids: readonly string[],
+  remove: typeof deleteRowsInDoc,
+): StructureResult {
+  if (readOnly) return { ok: false, reason: "readOnly" };
+  if (getSheetName(doc, sheetId) === undefined) return { ok: false, reason: "notFound" };
+  let done = false;
+  // The helper writes nothing when it refuses, so an empty transaction leaves no undo step.
+  doc.transact(() => {
+    done = remove(doc, sheetId, [...ids]);
+  }, LOCAL_ORIGIN);
+  return done ? { ok: true, ids: [...ids] } : { ok: false, reason: "last" };
+}
+
+/**
+ * Deletes rows with their cells, formats and heights; formulas elsewhere are rewritten (ranges
+ * shrink, single refs become #REF!). Refused (reason `last`) when no id matches or it would
+ * leave no rows.
+ */
+export function deleteRows(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  rowIds: readonly string[],
+): StructureResult {
+  return deleteAxis(doc, readOnly, sheetId, rowIds, deleteRowsInDoc);
+}
+
+/** Column counterpart of {@link deleteRows}. */
+export function deleteCols(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  colIds: readonly string[],
+): StructureResult {
+  return deleteAxis(doc, readOnly, sheetId, colIds, deleteColsInDoc);
 }
 
 export function useWorkbookMutations() {

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useStore } from "react-redux";
 import type { AppDispatch, RootState } from "../../app/store";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
 import type { FormulaEngine } from "../../engine";
 import { FormulaBar } from "../formula-bar/FormulaBar";
 import { AgGridView } from "./adapters/ag-grid/ag-grid-view";
-import { unimplementedStructureActions, type StructureActions } from "./commands";
+import { createStructureActions, type StructureActions } from "./commands";
 import { createGridInteraction, type GridInteraction } from "./interaction";
 import { connectModelToView, SheetViewModel } from "./model";
 import { GridOverlay } from "./overlay";
@@ -21,8 +21,8 @@ export interface GridContainerProps {
   /** Undo/redo for the keyboard chords (needs the router, so the container takes it as a prop). */
   history?: { undo(): void; redo(): void };
   /**
-   * Insert/delete rows and columns for the context menu and shortcuts. Defaults to a no-op
-   * placeholder until the shared insert/delete helpers are wired in (see `StructureActions`).
+   * Insert/delete rows and columns for the context menu and shortcuts. Defaults to the real
+   * one-transaction implementation (`createStructureActions`); tests may inject their own.
    */
   structure?: StructureActions;
 }
@@ -41,7 +41,7 @@ export function GridContainer({
   engine,
   createView = defaultCreateView,
   history,
-  structure = unimplementedStructureActions,
+  structure,
 }: GridContainerProps) {
   const { doc, readOnly } = useWorkbookDoc();
   const dispatch = useDispatch<AppDispatch>();
@@ -57,8 +57,12 @@ export function GridContainer({
   const createViewRef = useRef(createView);
   createViewRef.current = createView;
 
-  const structureRef = useRef(structure);
-  structureRef.current = structure;
+  const defaultStructure = useMemo(
+    () => createStructureActions({ doc, sheetId, dispatch, isReadOnly: () => readOnlyRef.current }),
+    [doc, sheetId, dispatch],
+  );
+  const structureRef = useRef(structure ?? defaultStructure);
+  structureRef.current = structure ?? defaultStructure;
 
   const historyRef = useRef(history);
   historyRef.current = history;

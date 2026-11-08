@@ -16,7 +16,11 @@ import { newDoc } from "../test-utils/workbook";
 import { LOCAL_ORIGIN } from "./origin";
 import {
   addSheet,
+  deleteCols,
+  deleteRows,
   deleteSheet,
+  insertCols,
+  insertRows,
   moveSheet,
   renameSheet,
   setColWidth,
@@ -279,5 +283,28 @@ describe("setColWidth / setRowHeight", () => {
     expect(setColWidth(doc, false, sheetId, col, 150)).toBe(true);
     expect(setColWidth(doc, false, sheetId, col, 150)).toBe(false);
     expect(w.updates).toBe(1);
+  });
+});
+
+describe("structure mutations", () => {
+  it("return the new ids, one update each; refusals write nothing", () => {
+    const { doc, sheetId } = newDoc();
+    const w = watch(doc);
+    const inserted = insertRows(doc, false, sheetId, 1, 2);
+    expect(inserted.ok && inserted.ids).toHaveLength(2);
+    expect(readRowOrder(doc, sheetId).slice(1, 3)).toEqual(inserted.ok ? inserted.ids : []);
+    expect(insertCols(doc, false, sheetId, 0, 1).ok).toBe(true);
+    expect(w.updates).toBe(2);
+
+    expect(insertRows(doc, true, sheetId, 0, 1)).toEqual({ ok: false, reason: "readOnly" });
+    expect(insertRows(doc, false, "nope", 0, 1)).toEqual({ ok: false, reason: "notFound" });
+    expect(insertCols(doc, false, sheetId, 0, 10_000)).toEqual({ ok: false, reason: "limit" });
+    expect(deleteRows(doc, true, sheetId, [readRowOrder(doc, sheetId)[0]!]).ok).toBe(false);
+    expect(deleteRows(doc, false, sheetId, readRowOrder(doc, sheetId)).ok).toBe(false);
+    expect(deleteCols(doc, false, sheetId, ["nope"]).ok).toBe(false);
+    expect(w.updates).toBe(2);
+
+    expect(deleteRows(doc, false, sheetId, [readRowOrder(doc, sheetId)[0]!]).ok).toBe(true);
+    expect(w.updates).toBe(3);
   });
 });
