@@ -2,6 +2,7 @@ import type * as Y from "yjs";
 import type { AppDispatch, RootState } from "../../../app/store";
 import { setCellInput } from "../commands/set-cell-input";
 import { clearRange } from "../commands/clear-range";
+import { toggleFormat } from "../commands/format-selection";
 import { gridActions } from "../gridSlice";
 import { isHeaderHit, coordsEqual, type CellCoord, type GridView } from "../port";
 import {
@@ -128,6 +129,11 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       case "clearRange":
         clearRange(target, sheetId, command.range, model);
         break;
+      case "toggleFormat": {
+        const selection = store.getState().grid.selection;
+        if (selection) toggleFormat(target, sheetId, selection, command.flag);
+        break;
+      }
       case "undo":
       case "redo": {
         history?.[command.type]();

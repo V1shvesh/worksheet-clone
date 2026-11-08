@@ -12,3 +12,53 @@
 .toolbar button[aria-pressed="true"] {
   background: #d0e4ff;
 }
+.toolbar-separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: #d0d7de;
+}
+.toolbar-format-b {
+  font-weight: bold;
+}
+.toolbar-format-i {
+  font-style: italic;
+}
+.toolbar-format-u {
+  text-decoration: underline;
+}
+.toolbar-fill {
+  position: relative;
+}
+.toolbar-fill-glyph {
+  display: inline-block;
+  border-bottom: 3px solid transparent;
+  line-height: 1;
+}
+.toolbar-fill-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(5, 24px);
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #d0d7de;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+.toolbar .toolbar-swatch {
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #aaa;
+  padding: 0;
+}
+.toolbar .toolbar-swatch[aria-pressed="true"] {
+  outline: 2px solid #1a56db;
+}
+.toolbar .toolbar-fill-none {
+  grid-column: 1 / -1;
+  width: auto;
+}

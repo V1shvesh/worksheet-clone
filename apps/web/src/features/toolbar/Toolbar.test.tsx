@@ -2,12 +2,16 @@ import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   addSheet as addSheetToDoc,
+  cellKey,
   getCell,
+  getFormatsMap,
   readColOrder,
   readRowOrder,
 } from "@worksheet-clone/shared";
+import type * as Y from "yjs";
+import { LOCAL_ORIGIN } from "../../crdt/origin";
 import { setCellContent } from "../../crdt/mutations";
-import { renderWithWorkbook } from "../../test-utils/render-workbook";
+import { asRemote, renderWithWorkbook } from "../../test-utils/render-workbook";
 import { newDoc } from "../../test-utils/workbook";
 import { gridActions } from "../grid/gridSlice";
 import { Toolbar } from "./Toolbar";
@@ -110,5 +114,103 @@ describe("Toolbar undo/redo", () => {
     });
     expect(store.getState().grid.selection).toEqual(selection);
     expect(store.getState().grid.restore).toBeNull();
+  });
+});
+
+describe("Toolbar formatting", () => {
+  function setup(opts: { readOnly?: boolean } = {}) {
+    const { doc, sheetId } = newDoc();
+    const view = renderWithWorkbook(<Toolbar />, {
+      doc,
+      route: `/workbooks/w1?sheet=${sheetId}`,
+      ...opts,
+    });
+    const rows = readRowOrder(doc, sheetId);
+    const cols = readColOrder(doc, sheetId);
+    const select = (r1: number, c1: number, r2 = r1, c2 = c1) =>
+      act(() => {
+        view.store.dispatch(gridActions.sheetOpened(sheetId));
+        view.store.dispatch(
+          gridActions.selectionChanged({
+            anchor: { rowId: rows[r1]!, colId: cols[c1]! },
+            focus: { rowId: rows[r2]!, colId: cols[c2]! },
+          }),
+        );
+      });
+    const origins: unknown[] = [];
+    doc.on("afterTransaction", (tr: Y.Transaction) => {
+      if (tr.changed.size > 0) origins.push(tr.origin);
+    });
+    const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
+    const format = (r: number, c: number) =>
+      getFormatsMap(doc, sheetId).get(cellKey(rows[r]!, cols[c]!));
+    return { doc, sheetId, select, origins, button, format, ...view };
+  }
+
+  it("buttons are disabled without a selection and for viewers", () => {
+    const s = setup();
+    expect(s.button("Bold").disabled).toBe(true);
+    expect(s.button("Fill color").disabled).toBe(true);
+    s.select(0, 0);
+    expect(s.button("Bold").disabled).toBe(false);
+    s.setReadOnly(true);
+    expect(s.button("Bold").disabled).toBe(true);
+    expect(s.button("Italic").disabled).toBe(true);
+    expect(s.button("Underline").disabled).toBe(true);
+    expect(s.button("Fill color").disabled).toBe(true);
+  });
+
+  it("a click formats the whole selection in one transaction, and undo reverts it in one step", () => {
+    const s = setup();
+    s.select(0, 0, 2, 1);
+    fireEvent.click(s.button("Bold"));
+    expect(s.origins).toEqual([LOCAL_ORIGIN]);
+    expect(s.format(2, 1)).toEqual({ b: true });
+    expect(s.button("Bold").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(s.button("Undo"));
+    expect(s.format(2, 1)).toBeUndefined();
+    expect(s.button("Bold").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("aria-pressed follows the active cell and remote changes", () => {
+    const s = setup();
+    s.select(0, 0);
+    expect(s.button("Italic").getAttribute("aria-pressed")).toBe("false");
+    act(() =>
+      asRemote(s.doc, () =>
+        getFormatsMap(s.doc, s.sheetId).set(
+          cellKey(readRowOrder(s.doc, s.sheetId)[0]!, readColOrder(s.doc, s.sheetId)[0]!),
+          { i: true },
+        ),
+      ),
+    );
+    expect(s.button("Italic").getAttribute("aria-pressed")).toBe("true");
+    s.select(1, 1);
+    expect(s.button("Italic").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("fill color: ten swatches plus None, applies and removes", () => {
+    const s = setup();
+    s.select(0, 0, 1, 0);
+    fireEvent.click(s.button("Fill color"));
+    expect(
+      screen.getAllByRole("button").filter((b) => b.classList.contains("toolbar-swatch")),
+    ).toHaveLength(10);
+    fireEvent.click(s.button("Yellow"));
+    expect(s.format(1, 0)).toEqual({ bg: "#fff2a8" });
+    expect(screen.queryByRole("button", { name: "Yellow" })).toBeNull();
+    fireEvent.click(s.button("Fill color"));
+    expect(s.button("Yellow").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    expect(s.format(0, 0)).toBeUndefined();
+    expect(s.origins).toHaveLength(2);
+  });
+
+  it("Escape closes the fill popover", () => {
+    const s = setup();
+    s.select(0, 0);
+    fireEvent.click(s.button("Fill color"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Fill colors" })).toBeNull();
   });
 });

@@ -170,6 +170,32 @@ describe("undo/redo chords", () => {
   });
 });
 
+describe("format chords", () => {
+  it("Cmd/Ctrl+B/I/U toggle the selection's format in one transaction each, never while editing", () => {
+    const { key, select, grid, transactions, model, view } = setup();
+    select(1, 1);
+    view.pointerDown(cell(2, 2), { shiftKey: true });
+    view.pointerUp(cell(2, 2));
+    key("b", { metaKey: true });
+    key("I", { ctrlKey: true });
+    expect(transactions).toHaveLength(2);
+    expect(model.getCell(cell(2, 2)).format).toEqual({ b: true, i: true });
+    key("b", { ctrlKey: true });
+    expect(model.getCell(cell(1, 1)).format).toEqual({ i: true });
+    expect(grid().editing).toBeNull();
+    key("x");
+    key("u", { metaKey: true });
+    expect(transactions).toHaveLength(3);
+  });
+
+  it("does nothing for viewers", () => {
+    const { key, select, transactions } = setup({ readOnly: true });
+    select(1, 1);
+    key("b", { metaKey: true });
+    expect(transactions).toHaveLength(0);
+  });
+});
+
 describe("editing", () => {
   it("characters typed with Alt (macOS) or AltGr (Ctrl+Alt on Windows) start editing", () => {
     const { key, select, grid } = setup();

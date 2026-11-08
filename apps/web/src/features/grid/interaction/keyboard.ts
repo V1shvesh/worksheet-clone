@@ -19,6 +19,7 @@ export interface KeyboardState {
 export type GridCommand =
   | { type: "setCellInput"; cell: CellCoord; raw: string }
   | { type: "clearRange"; range: CellRange }
+  | { type: "toggleFormat"; flag: "b" | "i" | "u" }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -68,13 +69,15 @@ function isShortcut(key: KeyInfo): boolean {
 }
 
 /**
- * Undo/redo chords: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y. They are commands, not
+ * Undo/redo chords (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y) and Cmd/Ctrl+B/I/U. They are commands, not
  * pass-through shortcuts, so the browser's own history never sees them.
  */
-function historyCommand(key: KeyInfo): GridCommand | null {
+function chordCommand(key: KeyInfo): GridCommand | null {
   if (!(key.metaKey || key.ctrlKey) || key.altKey) return null;
   const k = key.key.toLowerCase();
   if (k === "z") return { type: key.shiftKey ? "redo" : "undo" };
+  if ((k === "b" || k === "i" || k === "u") && !key.shiftKey)
+    return { type: "toggleFormat", flag: k };
   if (k === "y" && key.ctrlKey && !key.metaKey && !key.shiftKey) return { type: "redo" };
   return null;
 }
@@ -133,8 +136,8 @@ function reduceEditingKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv):
 export function reduceKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv): KeyboardResult {
   if (env.rowCount === 0 || env.colCount === 0) return { state, commands: [] };
   if (state.editing) return reduceEditingKey(state, key, env);
-  const history = historyCommand(key);
-  if (history) return { state, commands: [history] };
+  const chord = chordCommand(key);
+  if (chord) return { state, commands: [chord] };
   if (isShortcut(key)) return { state, commands: [] };
 
   const sel = state.selection;

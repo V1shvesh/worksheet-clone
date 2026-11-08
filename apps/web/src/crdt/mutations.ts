@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import type * as Y from "yjs";
 import {
   addSheet as addSheetToDoc,
+  cellKey,
   deleteSheet as deleteSheetFromDoc,
+  getFormatsMap,
   getSheetName,
   hasOtherVisibleSheet,
   isSheetHidden,
@@ -14,6 +16,7 @@ import {
   setSheetName,
   sheetNameSchema,
   type CellData,
+  type CellFormat,
 } from "@worksheet-clone/shared";
 import { LOCAL_ORIGIN } from "./origin";
 import { useWorkbookDoc } from "./WorkbookDoc";
@@ -119,6 +122,51 @@ export function clearCells(
 ): boolean {
   return transact(doc, readOnly, () => {
     for (const { rowId, colId } of cells) setCell(doc, sheetId, rowId, colId, undefined);
+  });
+}
+
+/**
+ * Format changes for a set of cells: `b`/`i`/`u` true sets the flag and false removes it
+ * (only `true` is ever stored); `bg` is a color, or null to remove it.
+ */
+export interface FormatPatch {
+  b?: boolean;
+  i?: boolean;
+  u?: boolean;
+  bg?: string | null;
+}
+
+function patched(current: CellFormat | undefined, patch: FormatPatch): CellFormat | undefined {
+  const next: CellFormat = { ...current };
+  for (const flag of ["b", "i", "u"] as const) {
+    if (patch[flag] === true) next[flag] = true;
+    else if (patch[flag] === false) delete next[flag];
+  }
+  if (typeof patch.bg === "string") next.bg = patch.bg;
+  else if (patch.bg === null) delete next.bg;
+  return Object.keys(next).length === 0 ? undefined : next;
+}
+
+/**
+ * Applies a format patch to every cell in a single transaction. Formats on empty
+ * cells are kept; a cell whose format ends up empty loses its entry.
+ */
+export function setFormat(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  cells: readonly { rowId: string; colId: string }[],
+  patch: FormatPatch,
+): boolean {
+  if (cells.length === 0 || getSheetName(doc, sheetId) === undefined) return false;
+  return transact(doc, readOnly, () => {
+    const formats = getFormatsMap(doc, sheetId);
+    for (const { rowId, colId } of cells) {
+      const key = cellKey(rowId, colId);
+      const next = patched(formats.get(key), patch);
+      if (next) formats.set(key, next);
+      else formats.delete(key);
+    }
   });
 }
 

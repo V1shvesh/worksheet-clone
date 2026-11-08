@@ -1,14 +1,25 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
+  cellKey,
+  getFormatsMap,
   getSheetName,
+  readColOrder,
+  readRowOrder,
   isSheetHidden,
   readSheetOrder,
   setSheetHidden as hideInDoc,
 } from "@worksheet-clone/shared";
 import { newDoc } from "../test-utils/workbook";
 import { LOCAL_ORIGIN } from "./origin";
-import { addSheet, deleteSheet, moveSheet, renameSheet, setSheetHidden } from "./mutations";
+import {
+  addSheet,
+  deleteSheet,
+  moveSheet,
+  renameSheet,
+  setFormat,
+  setSheetHidden,
+} from "./mutations";
 
 /** Counts transactions that changed the doc and the updates they emitted. */
 function watch(doc: Y.Doc) {
@@ -170,5 +181,55 @@ describe("sheet mutations", () => {
       expect(moveSheet(doc, false, "missing", 1)).toBe(false);
       expect(w.updates).toBe(0);
     });
+  });
+});
+
+describe("setFormat", () => {
+  const cellsOf = (doc: Y.Doc, sheetId: string, n: number) => {
+    const rows = readRowOrder(doc, sheetId);
+    const cols = readColOrder(doc, sheetId);
+    return Array.from({ length: n }, (_, i) => ({ rowId: rows[i]!, colId: cols[0]! }));
+  };
+  const formatAt = (doc: Y.Doc, sheetId: string, i: number) =>
+    getFormatsMap(doc, sheetId).get(
+      cellKey(readRowOrder(doc, sheetId)[i]!, readColOrder(doc, sheetId)[0]!),
+    );
+
+  it("formats every cell in one LOCAL_ORIGIN transaction, empty cells included", () => {
+    const { doc, sheetId } = newDoc();
+    const w = watch(doc);
+    expect(setFormat(doc, false, sheetId, cellsOf(doc, sheetId, 3), { b: true, bg: "#fff" })).toBe(
+      true,
+    );
+    expect(formatAt(doc, sheetId, 2)).toEqual({ b: true, bg: "#fff" });
+    expect(w.updates).toBe(1);
+    expect(w.origins).toEqual([LOCAL_ORIGIN]);
+  });
+
+  it("false removes a flag, null removes the color, and an empty format entry disappears", () => {
+    const { doc, sheetId } = newDoc();
+    const cells = cellsOf(doc, sheetId, 1);
+    setFormat(doc, false, sheetId, cells, { b: true, i: true, bg: "#abc" });
+    setFormat(doc, false, sheetId, cells, { b: false, bg: null });
+    expect(formatAt(doc, sheetId, 0)).toEqual({ i: true });
+    setFormat(doc, false, sheetId, cells, { i: false });
+    expect(formatAt(doc, sheetId, 0)).toBeUndefined();
+    expect(getFormatsMap(doc, sheetId).size).toBe(0);
+  });
+
+  it("merges into existing formats and never stores false", () => {
+    const { doc, sheetId } = newDoc();
+    const cells = cellsOf(doc, sheetId, 1);
+    setFormat(doc, false, sheetId, cells, { u: true });
+    setFormat(doc, false, sheetId, cells, { b: false, i: true });
+    expect(formatAt(doc, sheetId, 0)).toEqual({ u: true, i: true });
+  });
+
+  it("is refused while read-only and for no cells", () => {
+    const { doc, sheetId } = newDoc();
+    const w = watch(doc);
+    expect(setFormat(doc, true, sheetId, cellsOf(doc, sheetId, 1), { b: true })).toBe(false);
+    expect(setFormat(doc, false, sheetId, [], { b: true })).toBe(false);
+    expect(w.updates).toBe(0);
   });
 });
