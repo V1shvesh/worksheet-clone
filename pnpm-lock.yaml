@@ -115,6 +115,9 @@ importers:
       '@worksheet-clone/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      ag-grid-community:
+        specifier: ^36.3.0
+        version: 36.3.0
       hyperformula:
         specifier: ^3.5.0
         version: 3.5.0
@@ -1537,6 +1540,15 @@ packages:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  ag-charts-types@14.3.0:
+    resolution: {integrity: sha512-6VtzUYBKN5mFY24/Eye3RUn1AAq7s+/B4hEu83ZOK/Pjqx26tHq2MoxiXlBE8F7oQO0VpjV5rZZaw6wxSpMNJg==}
+
+  ag-grid-community@36.3.0:
+    resolution: {integrity: sha512-0JRaIwE82TuOcx+upA3OnTyhDAIUDqrMxLoBib6yVON0SyfICdpOnwD4QdiT0A1lgrC8SkzLBFRst73bTREF6Q==}
+
+  ag-stack@36.3.0:
+    resolution: {integrity: sha512-KbX/b6cM0GIJ4cz6W3jk8YoDG/XpqOC4WurYl8CDuQtER2d4rihjPI4tOLN4LqS0yfVspZ31ED1273kfG+6m0w==}
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
@@ -4673,6 +4685,15 @@ snapshots:
       acorn: 8.18.0
 
   acorn@8.18.0: {}
+
+  ag-charts-types@14.3.0: {}
+
+  ag-grid-community@36.3.0:
+    dependencies:
+      ag-charts-types: 14.3.0
+      ag-stack: 36.3.0
+
+  ag-stack@36.3.0: {}
 
   agent-base@7.1.4: {}
 
