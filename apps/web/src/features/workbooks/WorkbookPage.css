@@ -1,0 +1,21 @@
+/* The grid needs a definite height, so the workbook page is a full-viewport column. */
+body:has(.workbook-page) {
+  margin: 0;
+}
+.workbook-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  overflow: hidden;
+}
+.workbook-page-grid {
+  flex: 1;
+  min-height: 240px;
+  border: 1px solid #d0d7de;
+}
+.workbook-page-grid-loading {
+  padding: 8px;
+  color: #666;
+}
