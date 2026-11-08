@@ -78,6 +78,7 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
           rect={editRect}
           controller={controller}
           view={view}
+          takeFocus={editing.source !== "bar"}
         />
       )}
     </div>
@@ -89,6 +90,8 @@ interface CellEditorProps {
   rect: Rect | null;
   controller: GridInteraction;
   view: GridView;
+  /** False when the formula bar started the edit: it keeps focus and mirrors the same draft. */
+  takeFocus: boolean;
 }
 
 function moveFor(e: KeyboardEvent): Direction | null | undefined {
@@ -98,14 +101,16 @@ function moveFor(e: KeyboardEvent): Direction | null | undefined {
   return undefined;
 }
 
-function CellEditor({ draft, rect, controller, view }: CellEditorProps) {
+function CellEditor({ draft, rect, controller, view, takeFocus }: CellEditorProps) {
   const input = useRef<HTMLInputElement>(null);
 
   useLayoutEffect(() => {
     const el = input.current;
-    if (!el) return;
+    if (!el || !takeFocus) return;
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
+    // Focus is decided once, when the editor opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // This input is outside the adapter's container, so its key events never reach the

@@ -52,7 +52,7 @@ describe("GridContainer when the sheet changes", () => {
     expect(grid.sheetId).toBe(second);
     expect(grid.selection).toBeNull();
     expect(grid.editing).toBeNull();
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByTestId("cell-editor")).toBeNull();
     // The abandoned draft was never written to the first sheet.
     const rowId = readRowOrder(doc, first)[2]!;
     const colId = readColOrder(doc, first)[1]!;

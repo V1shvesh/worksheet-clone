@@ -9,6 +9,8 @@ export interface EditingState {
   draft: string;
   /** `typing` replaced the content with the first keystroke; `edit` started from the raw input. */
   mode: "typing" | "edit";
+  /** `bar` when the formula bar started it (and so keeps DOM focus); otherwise the cell editor does. */
+  source?: "bar";
 }
 
 export interface GridState {

@@ -3,6 +3,7 @@ import { useDispatch, useStore } from "react-redux";
 import type { AppDispatch, RootState } from "../../app/store";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
 import type { FormulaEngine } from "../../engine";
+import { FormulaBar } from "../formula-bar/FormulaBar";
 import { AgGridView } from "./adapters/ag-grid/ag-grid-view";
 import { createGridInteraction, type GridInteraction } from "./interaction";
 import { connectModelToView, SheetViewModel } from "./model";
@@ -87,8 +88,11 @@ export function GridContainer({
 
   return (
     <div className="grid-container">
-      <div ref={mountEl} className="grid-mount" />
-      {session && <GridOverlay {...session} readOnly={readOnly} />}
+      {session && <FormulaBar {...session} readOnly={readOnly} />}
+      <div className="grid-stage">
+        <div ref={mountEl} className="grid-mount" />
+        {session && <GridOverlay {...session} readOnly={readOnly} />}
+      </div>
     </div>
   );
 }

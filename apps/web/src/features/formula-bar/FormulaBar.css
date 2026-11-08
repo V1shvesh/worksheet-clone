@@ -1,0 +1,25 @@
+.formula-bar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #d0d7de;
+  font-size: 13px;
+}
+.formula-bar-name {
+  flex: none;
+  width: 90px;
+  padding: 4px 6px;
+  border: 1px solid #d0d7de;
+  background: #f6f8fa;
+  font-family: monospace;
+}
+.formula-bar-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #d0d7de;
+  font: inherit;
+  font-family: monospace;
+}

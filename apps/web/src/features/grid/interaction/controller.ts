@@ -63,6 +63,11 @@ export interface GridInteraction {
   commitEdit(draft: string, move: Direction | null): void;
   /** Discard the current edit (Esc); no-op if not editing. */
   cancelEdit(): void;
+  /**
+   * Opens an edit of the active cell (selection anchor) from its raw input; false when
+   * read-only, nothing is selected, or an edit is already open. The formula bar uses this.
+   */
+  startEdit(source: "bar"): boolean;
   /** Keep the Redux draft in sync with the overlay editor's text. */
   updateDraft(text: string): void;
   dispose(): void;
@@ -210,6 +215,22 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     cancelEdit() {
       const prev = keyboardState();
       if (prev.editing) apply(prev, cancelEditing(prev));
+    },
+    startEdit(source) {
+      const state = store.getState().grid;
+      if (target.readOnly || state.editing) return false;
+      const resolved = resolveSelection(state.selection, model);
+      const cell = resolved && cellIdAt(resolved.anchor, model);
+      if (!resolved || !cell) return false;
+      store.dispatch(
+        gridActions.editingStarted({
+          ...cell,
+          draft: model.getRawInput(resolved.anchor),
+          mode: "edit",
+          source,
+        }),
+      );
+      return true;
     },
     updateDraft(text) {
       if (store.getState().grid.editing) store.dispatch(gridActions.draftChanged(text));
