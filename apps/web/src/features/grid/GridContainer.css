@@ -48,3 +48,16 @@
   outline: none;
   pointer-events: auto;
 }
+.grid-fill-handle {
+  position: absolute;
+  box-sizing: border-box;
+  background: #1a73e8;
+  border: 1px solid #fff;
+  cursor: crosshair;
+  pointer-events: auto;
+}
+.grid-fill-preview {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed #1a73e8;
+}

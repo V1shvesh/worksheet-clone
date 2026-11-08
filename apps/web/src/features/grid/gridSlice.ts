@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { collabActions } from "../../crdt/collabSlice";
+import type { CellRange } from "./port";
 import type { IdSelection } from "./interaction/selection";
 
 /** The cell being edited, by id so a collaborator's row insert doesn't move it. */
@@ -22,9 +23,17 @@ export interface GridState {
    * sheet's grid closes and the new one mounts afterwards, and both reset the slice.
    */
   restore: { sheetId: string; selection: IdSelection } | null;
+  /** The cells (selection plus fill) a fill-handle drag would cover; visual indices, transient. */
+  fillPreview: CellRange | null;
 }
 
-const initialState: GridState = { sheetId: null, selection: null, editing: null, restore: null };
+const initialState: GridState = {
+  sheetId: null,
+  selection: null,
+  editing: null,
+  restore: null,
+  fillPreview: null,
+};
 
 // UI state for the open sheet only. Selection and the edited cell are ids, never
 // indices; cell content stays in the Y.Doc.
@@ -56,6 +65,9 @@ export const gridSlice = createSlice({
     },
     draftChanged(state, action: PayloadAction<string>) {
       if (state.editing) state.editing.draft = action.payload;
+    },
+    fillPreviewChanged(state, action: PayloadAction<CellRange | null>) {
+      state.fillPreview = action.payload;
     },
     editingEnded(state) {
       state.editing = null;

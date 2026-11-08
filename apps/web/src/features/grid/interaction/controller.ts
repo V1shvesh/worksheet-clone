@@ -3,6 +3,7 @@ import { readColOrder, readRowOrder } from "@worksheet-clone/shared";
 import type { AppDispatch, RootState } from "../../../app/store";
 import { LOCAL_ORIGIN } from "../../../crdt/origin";
 import { toastsActions } from "../../toasts/toastsSlice";
+import { fillRange } from "../commands/fill-range";
 import { moveCells, pasteEntries } from "../commands/paste";
 import { setCellInput } from "../commands/set-cell-input";
 import { clipboardActions } from "../clipboardSlice";
@@ -26,6 +27,7 @@ import {
   type PasteSource,
 } from "./clipboard";
 import { parseClipboardHtml } from "./clipboard-html";
+import { fillExtent, fillPointer, type FillExtent } from "./fill";
 import { parseTsv } from "./tsv";
 import {
   cancelEditing,
@@ -81,7 +83,20 @@ export interface GridInteractionDeps {
   history?: { undo(): void; redo(): void };
 }
 
+/** The fill-handle drag, driven by the overlay's pointer events (client coordinates). */
+export interface FillDrag {
+  /** Starts a drag from the current selection; false when read-only, editing or nothing selected. */
+  begin(): boolean;
+  /** Follows the pointer and updates `grid.fillPreview`. Positions outside the grid keep the last result. */
+  move(clientX: number, clientY: number): void;
+  /** Fills (if the pointer ended outside the selection) in one transaction, then selects source + fill. */
+  end(clientX: number, clientY: number): void;
+  /** Abandons the drag without writing (Escape, pointer cancel). */
+  cancel(): void;
+}
+
 export interface GridInteraction {
+  fill: FillDrag;
   /** Commit the current edit (the overlay editor's Enter/Tab/blur); no-op if not editing. */
   commitEdit(draft: string, move: Direction | null): void;
   /** Discard the current edit (Esc); no-op if not editing. */
@@ -317,6 +332,52 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     return true;
   };
 
+  let fillDrag: { source: CellRange; extent: FillExtent | null } | null = null;
+  const setPreview = (range: CellRange | null) => {
+    const current = store.getState().grid.fillPreview;
+    const same =
+      current === range ||
+      (current !== null &&
+        range !== null &&
+        coordsEqual(current.start, range.start) &&
+        coordsEqual(current.end, range.end));
+    if (!same) store.dispatch(gridActions.fillPreviewChanged(range));
+  };
+  const fillMove = (clientX: number, clientY: number) => {
+    if (!fillDrag) return;
+    const pointer = fillPointer(view.hitTest(clientX, clientY));
+    if (!pointer) return;
+    fillDrag.extent = fillExtent(fillDrag.source, pointer, model.dimensions());
+    setPreview(fillDrag.extent?.union ?? null);
+  };
+  const fillCancel = () => {
+    fillDrag = null;
+    setPreview(null);
+  };
+  const fill: FillDrag = {
+    begin() {
+      const state = store.getState().grid;
+      if (target.readOnly || state.editing) return false;
+      const resolved = resolveSelection(state.selection, model);
+      if (!resolved) return false;
+      fillDrag = { source: resolved.range, extent: null };
+      view.focus();
+      return true;
+    },
+    move: fillMove,
+    end(clientX, clientY) {
+      if (!fillDrag) return;
+      fillMove(clientX, clientY);
+      const { source, extent } = fillDrag;
+      fillCancel();
+      if (!extent || target.readOnly) return;
+      if (fillRange(target, sheetId, model, source, extent)) {
+        select({ anchor: extent.union.start, focus: extent.union.end });
+      }
+    },
+    cancel: fillCancel,
+  };
+
   const offs = [
     view.on("pointerDown", (t, e) => {
       view.focus();
@@ -345,7 +406,10 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     }),
     view.on("keyDown", (key) => {
       const prev = keyboardState();
-      if (key.key === "Escape" && !prev.editing) clearCutMark();
+      if (key.key === "Escape" && !prev.editing) {
+        clearCutMark();
+        fillCancel();
+      }
       apply(prev, reduceKey(prev, key, env()));
     }),
   ];
@@ -358,6 +422,7 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     },
     copy,
     paste,
+    fill,
     startEdit(source) {
       const state = store.getState().grid;
       if (target.readOnly || state.editing) return false;
@@ -379,6 +444,7 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
     },
     dispose() {
       for (const off of offs.splice(0)) off();
+      fillDrag = null;
       target.doc.off("afterTransaction", onTransaction);
       store.dispatch(gridActions.sheetClosed());
     },

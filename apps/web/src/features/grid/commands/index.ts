@@ -3,3 +3,4 @@ export * from "./set-cell-input";
 export * from "./clear-range";
 export * from "./format-selection";
 export * from "./paste";
+export * from "./fill-range";

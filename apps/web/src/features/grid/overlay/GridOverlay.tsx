@@ -1,10 +1,17 @@
-import { useEffect, useLayoutEffect, useReducer, useRef, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../../app/store";
 import type { GridInteraction, IdMapper } from "../interaction";
 import { resolveSelection, type Direction, type IdSelection } from "../interaction";
 import type { SheetViewModel } from "../model";
-import type { GridView, Rect } from "../port";
+import { rangeContains, type GridView, type Rect } from "../port";
 import { visibleRangeRect } from "./geometry";
 
 export interface GridOverlayProps {
@@ -24,6 +31,7 @@ const px = (r: Rect) => ({ left: r.x, top: r.y, width: r.width, height: r.height
 export function GridOverlay({ view, model, controller, readOnly }: GridOverlayProps) {
   const selection = useSelector((s: RootState) => s.grid.selection);
   const editing = useSelector((s: RootState) => s.grid.editing);
+  const fillPreview = useSelector((s: RootState) => s.grid.fillPreview);
   const cutMark = useSelector((s: RootState) => s.clipboard.cutMark);
   // Geometry changes without any Redux change (scroll, resize, structure edits).
   const [, refresh] = useReducer((n: number) => n + 1, 0);
@@ -52,6 +60,13 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
   // The anchor is the active cell (Excel/Sheets); Shift+arrows move only the far corner.
   const activeRect = resolved && view.getCellRect(resolved.anchor);
 
+  // The fill handle sits on the selection's bottom-right corner, only while that cell is on screen.
+  const handleCell =
+    resolved && !readOnly && !editing && rangeContains(view.getVisibleRange(), resolved.range.end)
+      ? view.getCellRect(resolved.range.end)
+      : null;
+  const previewRect = fillPreview && visibleRangeRect(view, fillPreview);
+
   // The cut mark is only drawn on the sheet it was cut from.
   const markSelection: IdSelection | null =
     cutMark && cutMark.sheetId === model.sheetId ? cutMark.range : null;
@@ -74,6 +89,10 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
           style={px(selectionRect)}
         />
       )}
+      {previewRect && (
+        <div className="grid-fill-preview" data-testid="fill-preview" style={px(previewRect)} />
+      )}
+      {handleCell && <FillHandle rect={handleCell} controller={controller} />}
       {cutRect && <div className="grid-cut-rect" data-testid="cut-rect" style={px(cutRect)} />}
       {activeRect && (
         <div className="grid-active-cell" data-testid="active-cell" style={px(activeRect)} />
@@ -90,6 +109,50 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
         />
       )}
     </div>
+  );
+}
+
+const HANDLE_SIZE = 8;
+
+function FillHandle({ rect, controller }: { rect: Rect; controller: GridInteraction }) {
+  const dragging = useRef(false);
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    // No text selection or focus change: the grid keeps focus (and so Escape).
+    e.preventDefault();
+    e.stopPropagation();
+    if (!controller.fill.begin()) return;
+    dragging.current = true;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (dragging.current) controller.fill.move(e.clientX, e.clientY);
+  };
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    controller.fill.end(e.clientX, e.clientY);
+  };
+  const onPointerCancel = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    controller.fill.cancel();
+  };
+  return (
+    <div
+      className="grid-fill-handle"
+      data-testid="fill-handle"
+      style={{
+        left: rect.x + rect.width - HANDLE_SIZE / 2,
+        top: rect.y + rect.height - HANDLE_SIZE / 2,
+        width: HANDLE_SIZE,
+        height: HANDLE_SIZE,
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+    />
   );
 }
 

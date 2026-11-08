@@ -309,3 +309,89 @@ describe("native clipboard events", () => {
     expect(copy.defaultPrevented).toBe(false);
   });
 });
+
+describe("fill handle", () => {
+  // jsdom has no PointerEvent: a MouseEvent with a pointer type name carries clientX/clientY,
+  // which is all the handle reads.
+  const pointer = (
+    el: Element,
+    type: "pointerdown" | "pointermove" | "pointerup",
+    at: { clientX?: number; clientY?: number } = {},
+  ) =>
+    act(() => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...at });
+      Object.defineProperty(event, "pointerId", { value: 1 });
+      el.dispatchEvent(event);
+    });
+  const centre = (view: FakeGridView, row: number, col: number) => {
+    const rect = view.getCellRect({ row, col })!;
+    return { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
+  };
+
+  it("sits on the selection's bottom-right corner and follows scroll", () => {
+    const { view } = setup();
+    click(view, 1, 1);
+    const handle = screen.getByTestId("fill-handle");
+    const rect = view.getCellRect({ row: 1, col: 1 })!;
+    expect(parseFloat(handle.style.left) + parseFloat(handle.style.width) / 2).toBeCloseTo(
+      rect.x + rect.width,
+      0,
+    );
+    expect(parseFloat(handle.style.top) + parseFloat(handle.style.height) / 2).toBeCloseTo(
+      rect.y + rect.height,
+      0,
+    );
+    act(() => view.scrollTo(0, 5000));
+    expect(screen.queryByTestId("fill-handle")).toBeNull(); // the corner is off-screen
+  });
+
+  it("is hidden for viewers and while editing", () => {
+    const viewer = setup({ readOnly: true });
+    click(viewer.view, 1, 1);
+    expect(screen.queryByTestId("fill-handle")).toBeNull();
+    cleanup();
+    const editor = setup();
+    click(editor.view, 1, 1);
+    expect(screen.getByTestId("fill-handle")).toBeInTheDocument();
+    press(editor.view, "F2");
+    expect(screen.queryByTestId("fill-handle")).toBeNull();
+  });
+
+  it("drags with pointer events: previews, fills on release, one local transaction", () => {
+    const { view, doc, sheetId, transactions } = setup();
+    act(() => edit(doc, sheetId, 0, 0, { v: 2 }));
+    click(view, 0, 0);
+    const handle = screen.getByTestId("fill-handle");
+    const before = transactions();
+    pointer(handle, "pointerdown");
+    pointer(handle, "pointermove", centre(view, 3, 0));
+    const preview = screen.getByTestId("fill-preview");
+    const top = view.getCellRect({ row: 0, col: 0 })!;
+    const bottom = view.getCellRect({ row: 3, col: 0 })!;
+    expect(px(preview)).toEqual({
+      left: top.x,
+      top: top.y,
+      width: top.width,
+      height: bottom.y + bottom.height - top.y,
+    });
+    pointer(handle, "pointerup", centre(view, 3, 0));
+    expect(screen.queryByTestId("fill-preview")).toBeNull();
+    expect(transactions() - before).toBe(1);
+    expect(view.displayedText({ row: 3, col: 0 })).toBe("2");
+  });
+
+  it("Escape during a drag cancels it", () => {
+    const { view, doc, sheetId, transactions } = setup();
+    act(() => edit(doc, sheetId, 0, 0, { v: 2 }));
+    click(view, 0, 0);
+    const handle = screen.getByTestId("fill-handle");
+    pointer(handle, "pointerdown");
+    pointer(handle, "pointermove", centre(view, 3, 0));
+    expect(screen.getByTestId("fill-preview")).toBeInTheDocument();
+    press(view, "Escape");
+    expect(screen.queryByTestId("fill-preview")).toBeNull();
+    pointer(handle, "pointerup", centre(view, 3, 0));
+    expect(transactions()).toBe(0);
+    expect(view.displayedText({ row: 3, col: 0 })).toBe("");
+  });
+});
