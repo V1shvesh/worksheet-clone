@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
+import { setPoolErrorLogger } from "./db/client.js";
 import { registerAuthRoutes } from "./http/auth.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
@@ -30,6 +31,9 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: buildLoggerOptions(options.logStream) });
+  setPoolErrorLogger((err) =>
+    app.log.warn({ err }, "postgres dropped an idle connection; the pool will reconnect"),
+  );
 
   // Must come before any register() so encapsulated route plugins inherit it.
   registerErrorHandler(app);
