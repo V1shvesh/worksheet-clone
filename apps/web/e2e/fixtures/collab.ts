@@ -76,6 +76,25 @@ export async function mockCollab(page: Page, options: { access: CollabAccess }) 
       Y.applyUpdate(doc, stored);
       return doc;
     },
+    /**
+     * Counts Yjs updates the server applies to a workbook from now on (client edits and
+     * remote edits alike). Call after the page has connected, so the live doc exists.
+     */
+    countUpdates(workbookId: string): { readonly count: number; stop(): void } {
+      const doc = hocuspocus.documents.get(workbookId);
+      if (!doc) throw new Error(`workbook ${workbookId} is not loaded on the server`);
+      let count = 0;
+      const onUpdate = () => {
+        count += 1;
+      };
+      doc.on("update", onUpdate);
+      return {
+        get count() {
+          return count;
+        },
+        stop: () => doc.off("update", onUpdate),
+      };
+    },
     /** Simulates the network dropping every open socket. */
     dropConnections(): void {
       for (const route of sockets.splice(0)) {
