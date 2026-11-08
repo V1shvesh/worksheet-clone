@@ -142,21 +142,29 @@ function validRow(digits: string): number | undefined {
   return row >= 1 && row <= MAX_ROW ? row - 1 : undefined;
 }
 
-function cellToken(r: Axis, c: Axis, resolve: IdResolver): string {
-  return `[[${r.abs ? "$" : ""}r:${resolve.rowId(r.index)},${c.abs ? "$" : ""}c:${resolve.colId(c.index)}]]`;
-}
-function colToken(c: Axis, resolve: IdResolver): string {
-  return `[[${c.abs ? "$" : ""}c:${resolve.colId(c.index)}]]`;
-}
-function rowToken(r: Axis, resolve: IdResolver): string {
-  return `[[${r.abs ? "$" : ""}r:${resolve.rowId(r.index)}]]`;
+/** How a matched reference is written back; encode and shift each supply one. */
+interface RefEmitter {
+  cell(r: Axis, c: Axis): string;
+  col(c: Axis): string;
+  row(r: Axis): string;
+  join(a: string, b: string): string;
 }
 
-/** Tries to read a reference at `pos`; returns its encoding and length. */
+function idEmitter(resolve: IdResolver): RefEmitter {
+  return {
+    cell: (r, c) =>
+      `[[${r.abs ? "$" : ""}r:${resolve.rowId(r.index)},${c.abs ? "$" : ""}c:${resolve.colId(c.index)}]]`,
+    col: (c) => `[[${c.abs ? "$" : ""}c:${resolve.colId(c.index)}]]`,
+    row: (r) => `[[${r.abs ? "$" : ""}r:${resolve.rowId(r.index)}]]`,
+    join: (a, b) => `${a}:${b}`,
+  };
+}
+
+/** Tries to read a reference at `pos`; returns its rewritten text and source length. */
 function matchRef(
   src: string,
   pos: number,
-  resolve: IdResolver,
+  emit: RefEmitter,
 ): { text: string; length: number } | undefined {
   CELL_RANGE_RE.lastIndex = pos;
   const cell = CELL_RANGE_RE.exec(src);
@@ -164,21 +172,19 @@ function matchRef(
     const col1 = validCol(cell[2] ?? "");
     const row1 = validRow(cell[4] ?? "");
     if (col1 !== undefined && row1 !== undefined) {
-      const a = cellToken(
+      const a = emit.cell(
         { abs: cell[3] === "$", index: row1 },
         { abs: cell[1] === "$", index: col1 },
-        resolve,
       );
       if (cell[6] === undefined) return { text: a, length: cell[0].length };
       const col2 = validCol(cell[6]);
       const row2 = validRow(cell[8] ?? "");
       if (col2 !== undefined && row2 !== undefined) {
-        const b = cellToken(
+        const b = emit.cell(
           { abs: cell[7] === "$", index: row2 },
           { abs: cell[5] === "$", index: col2 },
-          resolve,
         );
-        return { text: `${a}:${b}`, length: cell[0].length };
+        return { text: emit.join(a, b), length: cell[0].length };
       }
     }
     return undefined;
@@ -190,9 +196,9 @@ function matchRef(
     const c1 = validCol(cols[2] ?? "");
     const c2 = validCol(cols[4] ?? "");
     if (c1 === undefined || c2 === undefined) return undefined;
-    const a = colToken({ abs: cols[1] === "$", index: c1 }, resolve);
-    const b = colToken({ abs: cols[3] === "$", index: c2 }, resolve);
-    return { text: `${a}:${b}`, length: cols[0].length };
+    const a = emit.col({ abs: cols[1] === "$", index: c1 });
+    const b = emit.col({ abs: cols[3] === "$", index: c2 });
+    return { text: emit.join(a, b), length: cols[0].length };
   }
 
   ROW_RANGE_RE.lastIndex = pos;
@@ -201,9 +207,9 @@ function matchRef(
     const r1 = validRow(rows[2] ?? "");
     const r2 = validRow(rows[4] ?? "");
     if (r1 === undefined || r2 === undefined) return undefined;
-    const a = rowToken({ abs: rows[1] === "$", index: r1 }, resolve);
-    const b = rowToken({ abs: rows[3] === "$", index: r2 }, resolve);
-    return { text: `${a}:${b}`, length: rows[0].length };
+    const a = emit.row({ abs: rows[1] === "$", index: r1 });
+    const b = emit.row({ abs: rows[3] === "$", index: r2 });
+    return { text: emit.join(a, b), length: rows[0].length };
   }
   return undefined;
 }
@@ -242,11 +248,18 @@ function qualify(text: string, sheetId: string): string {
   return `[[s:${sheetId},${text.slice(2)}`;
 }
 
+/** What to do with the references that follow a given sheet prefix (or none). */
+interface RefTarget {
+  emit: RefEmitter;
+  /** Final text for a matched reference; `prefix` is the verbatim source prefix ("" when none). */
+  wrap(prefix: string, text: string, source: string): string;
+}
+
 /**
- * A1 formula text to stored (id-based) form. References to unknown sheets and
- * text the codec cannot read as a reference are kept verbatim.
+ * Walks A1 text and rewrites every reference. Strings, function names and
+ * anything that does not read as a reference are copied verbatim.
  */
-export function encodeFormula(a1Formula: string, ctx: EncodeContext): string {
+function rewriteRefs(a1Formula: string, targetFor: (sheetName: string | undefined) => RefTarget) {
   let out = "";
   let i = 0;
   while (i < a1Formula.length) {
@@ -256,14 +269,15 @@ export function encodeFormula(a1Formula: string, ctx: EncodeContext): string {
       const prefix = readSheetPrefix(a1Formula, i);
       if (prefix) {
         const refStart = i + prefix.length;
-        const sheetId = ctx.sheetIdByName(prefix.name);
-        const m = matchRef(a1Formula, refStart, ctx.resolver(sheetId ?? ctx.sheetId));
+        const target = targetFor(prefix.name);
+        const m = matchRef(a1Formula, refStart, target.emit);
         const next = m ? (a1Formula[refStart + m.length] ?? "") : "";
         if (m && !/[A-Za-z0-9_(]/.test(next)) {
-          out +=
-            sheetId === undefined
-              ? a1Formula.slice(i, refStart + m.length)
-              : qualify(m.text, sheetId);
+          out += target.wrap(
+            a1Formula.slice(i, refStart),
+            m.text,
+            a1Formula.slice(refStart, refStart + m.length),
+          );
           i = refStart + m.length;
         } else {
           // Not a reference after all: leave the prefix text alone.
@@ -280,10 +294,11 @@ export function encodeFormula(a1Formula: string, ctx: EncodeContext): string {
       continue;
     }
     if (/[A-Za-z0-9$]/.test(ch) && !IDENT_CHAR.test(prev)) {
-      const m = matchRef(a1Formula, i, ctx.resolver(ctx.sheetId));
+      const target = targetFor(undefined);
+      const m = matchRef(a1Formula, i, target.emit);
       const next = m ? (a1Formula[i + m.length] ?? "") : "";
       if (m && !/[A-Za-z0-9_(]/.test(next)) {
-        out += m.text;
+        out += target.wrap("", m.text, a1Formula.slice(i, i + m.length));
         i += m.length;
         continue;
       }
@@ -292,6 +307,76 @@ export function encodeFormula(a1Formula: string, ctx: EncodeContext): string {
     i++;
   }
   return out;
+}
+
+/**
+ * A1 formula text to stored (id-based) form. References to unknown sheets and
+ * text the codec cannot read as a reference are kept verbatim.
+ */
+export function encodeFormula(a1Formula: string, ctx: EncodeContext): string {
+  return rewriteRefs(a1Formula, (name) => {
+    const sheetId = name === undefined ? undefined : ctx.sheetIdByName(name);
+    return {
+      emit: idEmitter(ctx.resolver(sheetId ?? ctx.sheetId)),
+      wrap: (prefix, text, source) =>
+        name === undefined
+          ? text
+          : sheetId === undefined
+            ? prefix + source
+            : qualify(text, sheetId),
+    };
+  });
+}
+
+export interface ShiftBounds {
+  rowCount: number;
+  colCount: number;
+}
+
+/**
+ * Moves an A1 formula as if copied by (`rows`, `cols`): every relative part of
+ * every reference shifts, `$`-anchored parts stay. A part shifted outside
+ * 0..count-1 turns the whole reference (or range, as in Excel) into `#REF!`.
+ * Bounds describe the destination sheet and are also applied to sheet-qualified
+ * refs (limitation: all sheets share one size until row/column inserts exist).
+ */
+export function shiftFormula(
+  a1Formula: string,
+  rows: number,
+  cols: number,
+  bounds: ShiftBounds,
+): string {
+  const moveRow = (r: Axis): number | undefined => {
+    const index = r.abs ? r.index : r.index + rows;
+    return index >= 0 && index < bounds.rowCount ? index : undefined;
+  };
+  const moveCol = (c: Axis): number | undefined => {
+    const index = c.abs ? c.index : c.index + cols;
+    return index >= 0 && index < bounds.colCount ? index : undefined;
+  };
+  const rowText = (r: Axis) => {
+    const index = moveRow(r);
+    return index === undefined ? undefined : `${r.abs ? "$" : ""}${index + 1}`;
+  };
+  const colText = (c: Axis) => {
+    const index = moveCol(c);
+    return index === undefined ? undefined : `${c.abs ? "$" : ""}${colIndexToLabel(index)}`;
+  };
+  const emit: RefEmitter = {
+    cell: (r, c) => {
+      const rt = rowText(r);
+      const ct = colText(c);
+      return rt === undefined || ct === undefined ? REF_ERROR : ct + rt;
+    },
+    col: (c) => colText(c) ?? REF_ERROR,
+    row: (r) => rowText(r) ?? REF_ERROR,
+    join: (a, b) => (a === REF_ERROR || b === REF_ERROR ? REF_ERROR : `${a}:${b}`),
+  };
+  const target: RefTarget = {
+    emit,
+    wrap: (prefix, text) => (text === REF_ERROR ? text : prefix + text),
+  };
+  return rewriteRefs(a1Formula, () => target);
 }
 
 const ID = "[A-Za-z0-9_-]+";

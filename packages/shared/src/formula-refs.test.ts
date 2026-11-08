@@ -9,6 +9,7 @@ import {
   formatSheetPrefix,
   quoteSheetName,
   referencedSheetIds,
+  shiftFormula,
   type DecodeContext,
   type EncodeContext,
   type IdLookup,
@@ -477,6 +478,109 @@ describe("formula codec properties", () => {
           });
           expect(engine).not.toContain("#REF!");
           expect(engine).toMatch(/'q\d'!/);
+        },
+      ),
+    );
+  });
+});
+
+describe("shiftFormula", () => {
+  const bounds = { rowCount: 100, colCount: 26 };
+  const shift = (f: string, r: number, c: number) => shiftFormula(f, r, c, bounds);
+
+  it("shifts relative cells", () => {
+    expect(shift("=A1*2", 1, 0)).toBe("=A2*2");
+    expect(shift("=A1*2", 0, 2)).toBe("=C1*2");
+    expect(shift("=B5+C6", -1, -1)).toBe("=A4+B5");
+  });
+
+  it("keeps $-anchored parts, shifts the rest", () => {
+    expect(shift("=$A$1", 3, 3)).toBe("=$A$1");
+    expect(shift("=A$1", 3, 3)).toBe("=D$1");
+    expect(shift("=$A1", 3, 3)).toBe("=$A4");
+  });
+
+  it("shifts ranges", () => {
+    expect(shift("=SUM(A1:A3)", 2, 0)).toBe("=SUM(A3:A5)");
+    expect(shift("=SUM($A1:B$3)", 1, 1)).toBe("=SUM($A2:C$3)");
+  });
+
+  it("shifts whole-column and whole-row ranges on their own axis only", () => {
+    expect(shift("=SUM(A:C)", 5, 1)).toBe("=SUM(B:D)");
+    expect(shift("=SUM($A:C)", 0, 1)).toBe("=SUM($A:D)");
+    expect(shift("=SUM(3:5)", 2, 7)).toBe("=SUM(5:7)");
+    expect(shift("=SUM(3:$5)", 2, 7)).toBe("=SUM(5:$5)");
+  });
+
+  it("shifts sheet-qualified references and keeps the prefix verbatim", () => {
+    expect(shift("=Sheet2!A1", 1, 1)).toBe("=Sheet2!B2");
+    expect(shift("='My Sheet'!A1:B2", 1, 0)).toBe("='My Sheet'!A2:B3");
+    expect(shift("='it''s'!$A1", 2, 2)).toBe("='it''s'!$A3");
+  });
+
+  it("turns off-grid references into #REF!", () => {
+    expect(shift("=A1", -1, 0)).toBe("=#REF!");
+    expect(shift("=A1", 0, -1)).toBe("=#REF!");
+    expect(shift("=Z1", 0, 1)).toBe("=#REF!");
+    expect(shift("=A100", 1, 0)).toBe("=#REF!");
+    expect(shift("=A99", 1, 0)).toBe("=A100");
+    expect(shift("=Sheet2!A1+B1", -1, 0)).toBe("=#REF!+#REF!");
+    expect(shift("=A$1", -1, 0)).toBe("=A$1");
+  });
+
+  it("makes the whole range #REF! when either endpoint falls off", () => {
+    expect(shift("=SUM(A1:A3)", -1, 0)).toBe("=SUM(#REF!)");
+    expect(shift("=SUM(A98:A100)", 1, 0)).toBe("=SUM(#REF!)");
+    expect(shift("=SUM(Y:Z)", 0, 1)).toBe("=SUM(#REF!)");
+    expect(shift("=SUM(1:2)", -1, 0)).toBe("=SUM(#REF!)");
+    expect(shift("=Sheet2!A1:B2", -1, 0)).toBe("=#REF!");
+  });
+
+  it("leaves strings, function names, booleans, numbers and #REF! alone", () => {
+    expect(shift('="A1"&A1', 1, 0)).toBe('="A1"&A2');
+    expect(shift('="say ""B2"""&B2', 1, 1)).toBe('="say ""B2"""&C3');
+    expect(shift("=LOG10(A1)", 1, 0)).toBe("=LOG10(A2)");
+    expect(shift("=IF(TRUE,1.5,FALSE)", 4, 4)).toBe("=IF(TRUE,1.5,FALSE)");
+    expect(shift("=#REF!+A1", 1, 0)).toBe("=#REF!+A2");
+    expect(shift("=1+2", 3, 3)).toBe("=1+2");
+  });
+
+  it("uppercases lowercase references", () => {
+    expect(shift("=a1", 1, 0)).toBe("=A2");
+  });
+
+  const colLabel = fc.integer({ min: 0, max: 25 }).map(colIndexToLabel);
+  const dollar = fc.constantFrom("", "$");
+  const cellRef = fc
+    .tuple(dollar, colLabel, dollar, fc.integer({ min: 1, max: 100 }))
+    .map(([d1, c, d2, r]) => `${d1}${c}${d2}${r}`);
+  const ref = fc.oneof(
+    cellRef,
+    fc.tuple(cellRef, cellRef).map(([a, b]) => `${a}:${b}`),
+    fc.tuple(dollar, colLabel, dollar, colLabel).map(([d1, a, d2, b]) => `${d1}${a}:${d2}${b}`),
+    fc
+      .tuple(dollar, fc.integer({ min: 1, max: 100 }), dollar, fc.integer({ min: 1, max: 100 }))
+      .map(([d1, a, d2, b]) => `${d1}${a}:${d2}${b}`),
+  );
+  const prefix = fc.constantFrom("", "", "Sheet2!", "'My Sheet'!");
+  const formula = fc
+    .array(fc.tuple(prefix, ref), { minLength: 1, maxLength: 4 })
+    .map((parts) => `=SUM(${parts.map(([p, r]) => p + r).join(",")})+LOG10(2)`);
+
+  it("shift by (0,0) is the identity on canonical formulas", () => {
+    fc.assert(fc.property(formula, (f) => shiftFormula(f, 0, 0, bounds) === f));
+  });
+
+  it("shifting there and back restores the formula when nothing went off-grid", () => {
+    fc.assert(
+      fc.property(
+        formula,
+        fc.integer({ min: -30, max: 30 }),
+        fc.integer({ min: -10, max: 10 }),
+        (f, r, c) => {
+          const moved = shiftFormula(f, r, c, bounds);
+          fc.pre(!moved.includes("#REF!"));
+          return shiftFormula(moved, -r, -c, bounds) === f;
         },
       ),
     );
