@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
+  addSheet,
+  deleteSheet,
   getCell,
   getSheetName,
   readSheetOrder,
@@ -133,5 +135,43 @@ describe("realtime collaboration (real server, real Postgres)", { timeout: 30_00
     expect(readSheetOrder(reopened.doc)).toEqual([sheetId]);
     expect(getSheetName(reopened.doc, sheetId)).toBe("Survives restarts");
     expect(getCell(reopened.doc, sheetId, "r1", "c1")).toEqual({ v: true });
+  });
+
+  it("repairs a workbook whose last two sheets were deleted concurrently: exactly one sheet remains", async () => {
+    const alice = await newUser("alice");
+    const bob = await newUser("bob");
+    const workbookId = await createWorkbook(alice, "Racing deletes");
+    await share(alice, workbookId, bob, "editor");
+
+    const a = await open(alice, workbookId);
+    const b = await open(bob, workbookId);
+    const [first = ""] = readSheetOrder(a.doc);
+    const second = addSheet(a.doc, "Sheet2");
+    await waitFor(() => readSheetOrder(b.doc).length === 2);
+
+    // Both deletes happen locally in the same tick, before either update can
+    // reach the other client, so each still saw a sheet that would remain.
+    deleteSheet(a.doc, first);
+    deleteSheet(b.doc, second);
+
+    await waitFor(
+      () =>
+        readSheetOrder(a.doc).length === 1 &&
+        readSheetOrder(b.doc).length === 1 &&
+        readSheetOrder(a.doc)[0] === readSheetOrder(b.doc)[0],
+      10_000,
+    );
+    const [repaired = ""] = readSheetOrder(a.doc);
+    expect([first, second]).not.toContain(repaired);
+    expect(Y.encodeStateAsUpdate(a.doc)).toEqual(Y.encodeStateAsUpdate(b.doc));
+
+    // Persisted: a fresh client sees the same single sheet, and no second
+    // repair sneaks in later.
+    await waitFor(() => !a.provider.hasUnsyncedChanges && !b.provider.hasUnsyncedChanges);
+    await closeAll();
+    const reopened = await open(alice, workbookId);
+    expect(readSheetOrder(reopened.doc)).toEqual([repaired]);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(readSheetOrder(reopened.doc)).toEqual([repaired]);
   });
 });

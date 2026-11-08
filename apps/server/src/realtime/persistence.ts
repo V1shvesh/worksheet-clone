@@ -3,10 +3,15 @@ import type { FastifyBaseLogger } from "fastify";
 import * as Y from "yjs";
 import {
   createEmptyWorkbook,
+  ensureWorkbookHasSheet,
   isWorkbookInitialized,
   migrateWorkbook,
 } from "@worksheet-clone/shared";
 import { loadDocumentState, snapshotIfDue, storeDocumentState } from "../domain/documents.js";
+
+// Origin of the server's own repair transaction. A "local" Hocuspocus origin
+// is stored (and broadcast) like any other change.
+const REPAIR_ORIGIN = { source: "local" } as const;
 
 export function persistenceExtension(log: FastifyBaseLogger): Extension {
   return {
@@ -30,6 +35,22 @@ export function persistenceExtension(log: FastifyBaseLogger): Extension {
         // Stored for the same reason as the seed: a migration that isn't
         // persisted could be redone with different ids and merge into duplicates.
         await storeDocumentState(documentName, Y.encodeStateAsUpdate(document));
+      } else if (ensureWorkbookHasSheet(document, REPAIR_ORIGIN)) {
+        log.warn({ workbookId: documentName }, "restored a sheet to a workbook that had none");
+        await storeDocumentState(documentName, Y.encodeStateAsUpdate(document));
+      }
+    },
+
+    // Two editors can concurrently delete the last two sheets; each client
+    // allowed it because it still saw another sheet. Only the server repairs
+    // that (a repair by every client would add one sheet each). The repair's
+    // own transaction fires onChange again, but by then a sheet exists so
+    // ensureWorkbookHasSheet writes nothing: no loop. The repair is a normal
+    // change, so Hocuspocus broadcasts it and schedules the debounced store.
+    async onChange({ document, documentName, transactionOrigin }) {
+      if (transactionOrigin === REPAIR_ORIGIN) return;
+      if (ensureWorkbookHasSheet(document, REPAIR_ORIGIN)) {
+        log.warn({ workbookId: documentName }, "restored a sheet to a workbook that had none");
       }
     },
 

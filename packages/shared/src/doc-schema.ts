@@ -95,7 +95,20 @@ function newIds(count: number): string[] {
   return Array.from({ length: count }, () => newId());
 }
 
-export function addSheet(doc: Y.Doc, name: string, sheetId: string = newId()): string {
+export interface AddSheetOptions {
+  /** Insert right after this sheet in the order; at the end when absent or unknown. */
+  afterSheetId?: string;
+  /** Use this id instead of a fresh one (tests, deterministic callers). */
+  sheetId?: string;
+}
+
+/**
+ * Adds an empty sheet with the default grid and returns its id. A bare string
+ * as the third argument is the sheet id (older call sites).
+ */
+export function addSheet(doc: Y.Doc, name: string, options: AddSheetOptions | string = {}): string {
+  const { afterSheetId, sheetId = newId() } =
+    typeof options === "string" ? { sheetId: options } : options;
   const sheet: SheetMap = new Y.Map();
   sheet.set("name", name);
   sheet.set("hidden", false);
@@ -106,7 +119,9 @@ export function addSheet(doc: Y.Doc, name: string, sheetId: string = newId()): s
   sheet.set("colWidths", new Y.Map<number>());
   sheet.set("rowHeights", new Y.Map<number>());
   getSheetsMap(doc).set(sheetId, sheet);
-  getSheetOrderArray(doc).push([sheetId]);
+  const order = getSheetOrderArray(doc);
+  const after = afterSheetId === undefined ? -1 : order.toArray().indexOf(afterSheetId);
+  order.insert(after === -1 ? order.length : after + 1, [sheetId]);
   return sheetId;
 }
 
@@ -208,5 +223,97 @@ export function migrateWorkbook(doc: Y.Doc): boolean {
     }
     getMeta(doc).set("schemaVersion", SCHEMA_VERSION);
   });
+  return true;
+}
+
+/** True when a sheet (hidden ones included) already uses this name, ignoring case. */
+export function isSheetNameTaken(doc: Y.Doc, name: string, exceptSheetId?: string): boolean {
+  const wanted = name.trim().toLowerCase();
+  for (const id of getSheetsMap(doc).keys()) {
+    if (id !== exceptSheetId && getSheetName(doc, id)?.toLowerCase() === wanted) return true;
+  }
+  return false;
+}
+
+/** The first unused default name: Sheet1, Sheet2, ... */
+export function nextSheetName(doc: Y.Doc): string {
+  for (let n = 1; ; n++) {
+    const name = `Sheet${n}`;
+    if (!isSheetNameTaken(doc, name)) return name;
+  }
+}
+
+export function setSheetHidden(doc: Y.Doc, sheetId: string, hidden: boolean): void {
+  requireSheet(doc, sheetId).set("hidden", hidden);
+}
+
+/**
+ * Removes the sheet and every occurrence of its id from the order (concurrent
+ * moves can leave duplicates). Callers forbid deleting the last visible sheet
+ * (see `hasOtherVisibleSheet`); concurrent deletes are repaired by the server.
+ */
+export function deleteSheet(doc: Y.Doc, sheetId: string): void {
+  getSheetsMap(doc).delete(sheetId);
+  removeFromOrder(getSheetOrderArray(doc), sheetId);
+}
+
+function removeFromOrder(order: Y.Array<string>, sheetId: string): void {
+  for (let i = order.length - 1; i >= 0; i--) {
+    if (order.get(i) === sheetId) order.delete(i, 1);
+  }
+}
+
+/**
+ * Moves a sheet so it sits at `toIndex` in `readSheetOrder` terms (deduped,
+ * only existing sheets; clamped to the valid range). Yjs has no move: all
+ * occurrences are deleted and one is inserted, in the caller's transaction.
+ * Concurrent moves of the same sheet may both insert; readers keep the first
+ * occurrence, so every client agrees.
+ */
+export function moveSheet(doc: Y.Doc, sheetId: string, toIndex: number): void {
+  const others = readSheetOrder(doc).filter((id) => id !== sheetId);
+  const target = Math.max(0, Math.min(Math.trunc(toIndex), others.length));
+  const order = getSheetOrderArray(doc);
+  removeFromOrder(order, sheetId);
+  // Insert just before the first raw occurrence of the sheet that should follow
+  // it: everything readers see before that point is exactly others[0..target).
+  const follower = others[target];
+  const position = follower === undefined ? order.length : order.toArray().indexOf(follower);
+  order.insert(position, [sheetId]);
+}
+
+/**
+ * Non-hidden sheets in order. If sheets exist but all are hidden (concurrent
+ * hides), the first sheet counts as visible: a read rule, nothing is written.
+ */
+export function readVisibleSheetOrder(doc: Y.Doc): string[] {
+  const order = readSheetOrder(doc);
+  const visible = order.filter((id) => !isSheetHidden(doc, id));
+  const [first] = order;
+  return visible.length === 0 && first !== undefined ? [first] : visible;
+}
+
+/**
+ * True when some sheet other than `sheetId` is not hidden, i.e. hiding or
+ * deleting `sheetId` still leaves a visible sheet. Callers use it to forbid
+ * hiding/deleting the last visible sheet.
+ */
+export function hasOtherVisibleSheet(doc: Y.Doc, sheetId: string): boolean {
+  return readSheetOrder(doc).some((id) => id !== sheetId && !isSheetHidden(doc, id));
+}
+
+/**
+ * Server-only repair: an initialized workbook with no sheets (two users
+ * concurrently deleted the last two) gets one new sheet, in one transaction.
+ * Returns whether it wrote. Only the server may do this, for the same reason
+ * as `createEmptyWorkbook`: if every client repaired, each would add a sheet
+ * and all of them would survive the merge. Idempotent: a second call finds a
+ * sheet and does nothing.
+ */
+export function ensureWorkbookHasSheet(doc: Y.Doc, origin?: unknown): boolean {
+  if (!isWorkbookInitialized(doc) || readSheetOrder(doc).length > 0) return false;
+  doc.transact(() => {
+    addSheet(doc, nextSheetName(doc));
+  }, origin);
   return true;
 }
