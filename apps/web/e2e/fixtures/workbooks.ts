@@ -4,7 +4,7 @@ import { json } from "./session";
 
 export const me = { id: "00000000-0000-4000-8000-000000000001", email: "me@example.com" };
 
-interface MockWorkbook {
+export interface MockWorkbook {
   summary: WorkbookSummary;
   members: Member[];
 }

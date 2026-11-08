@@ -29,7 +29,7 @@ export async function openWorkbook(
 ) {
   await mockApiFallback(page);
   await mockSession(page, me);
-  await mockWorkbooks(page, [
+  const workbooks = await mockWorkbooks(page, [
     workbook(workbookId, "Tools", access === "readonly" ? "viewer" : "owner"),
   ]);
   const collab = await mockCollab(page, { access });
@@ -65,7 +65,7 @@ export async function openWorkbook(
       author,
     );
   const updates = () => collab.countUpdates(workbookId);
-  return { grid, tabs, collab, serverCell, serverFormat, remote, updates, ids };
+  return { grid, tabs, collab, workbooks, serverCell, serverFormat, remote, updates, ids };
 }
 
 export const clipboardPermissions = ["clipboard-read", "clipboard-write"];

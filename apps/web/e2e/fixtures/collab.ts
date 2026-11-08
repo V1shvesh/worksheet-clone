@@ -7,6 +7,7 @@ import {
   isWorkbookInitialized,
   readSheetNames,
   setSheetName,
+  COLLAB_CLOSE_CODES,
   type CollabNotice,
 } from "@worksheet-clone/shared";
 import { me } from "./workbooks";
@@ -38,6 +39,10 @@ export async function mockCollab(
   },
 ) {
   const storage = new Map<string, Uint8Array>();
+  // What the next (re)authentication grants; tests change it with `setAccess`.
+  let access = options.access;
+  // While true every new socket is closed at once, as when the network or the server is unreachable.
+  let refusing = false;
   // Like the real server's sheet-rename notice extension: remember each
   // document's sheet names and broadcast a `sheetRenamed` stateless notice,
   // attributed to the connection's context, whenever a change renames a sheet.
@@ -45,11 +50,11 @@ export async function mockCollab(
   const hocuspocus = new Hocuspocus({
     quiet: true,
     async onAuthenticate({ connectionConfig }) {
-      if (options.access === "denied") {
+      if (access === "denied") {
         // Empty message keeps Hocuspocus from logging an expected denial.
         throw Object.assign(new Error(""), { reason: "forbidden" });
       }
-      connectionConfig.readOnly = options.access === "readonly";
+      connectionConfig.readOnly = access === "readonly";
       return PAGE_USER;
     },
     async afterLoadDocument({ document, documentName }) {
@@ -95,7 +100,22 @@ export async function mockCollab(
   // While set, everything the server sends to the page queues up here instead of being
   // delivered (see `holdDelivery`). Order is preserved on release.
   let held: { route: WebSocketRoute; data: Buffer }[] | null = null;
+  // While set, the page's messages queue here instead of reaching the server (a slow uplink).
+  let uplinkHeld = false;
+  const uplink: { route: WebSocketRoute; deliver: () => Promise<void> }[] = [];
+  const closeSockets = (code: number, reason: string) => {
+    for (const route of sockets.splice(0)) {
+      // Whatever the page sent but the server had not received is lost with the socket.
+      for (let i = uplink.length - 1; i >= 0; i--)
+        if (uplink[i]?.route === route) uplink.splice(i, 1);
+      void route.close({ code, reason });
+    }
+  };
   await page.routeWebSocket(/\/collab$/, (route) => {
+    if (refusing) {
+      void route.close({ code: 1006, reason: "connection refused" });
+      return;
+    }
     sockets.push(route);
     const socket: WebSocketLike = {
       readyState: 1,
@@ -117,11 +137,14 @@ export async function mockCollab(
       if (options.acceptDelayMs) await accepted;
       return hocuspocus.handleConnection(socket, new Request(route.url()));
     })();
-    route.onMessage(async (message) =>
-      (await connection).handleMessage(
-        typeof message === "string" ? new TextEncoder().encode(message) : new Uint8Array(message),
-      ),
-    );
+    route.onMessage(async (message) => {
+      const deliver = async () =>
+        (await connection).handleMessage(
+          typeof message === "string" ? new TextEncoder().encode(message) : new Uint8Array(message),
+        );
+      if (uplinkHeld) uplink.push({ route, deliver });
+      else await deliver();
+    });
     route.onClose(async (code, reason) =>
       (await connection).handleClose({ code: code ?? 1005, reason: reason ?? "" }),
     );
@@ -199,9 +222,47 @@ export async function mockCollab(
     },
     /** Simulates the network dropping every open socket. */
     dropConnections(): void {
-      for (const route of sockets.splice(0)) {
-        void route.close({ code: 1006, reason: "network lost" });
-      }
+      closeSockets(1006, "network lost");
+    },
+    /**
+     * Simulates the server closing every socket the way revokeUserAccess/revokeAllAccess do (code
+     * 4205 with a reason); the provider then reconnects and is authenticated afresh, so pair this
+     * with `setAccess` first.
+     */
+    kick(reason: "access-changed" | "workbook-deleted" = "access-changed"): void {
+      closeSockets(COLLAB_CLOSE_CODES.accessChanged, reason);
+    },
+    /** What the next authentication grants. */
+    setAccess(next: CollabAccess): void {
+      access = next;
+    },
+    /** While on, new sockets are closed immediately (the server or network is unreachable). */
+    refuseConnections(on: boolean): void {
+      refusing = on;
+    },
+    /**
+     * Holds back everything the page sends, as a stalled uplink would: its edits stay unconfirmed.
+     * Closing the socket (`kick`, `dropConnections`) discards what is held; `releaseUplink`
+     * delivers it in order otherwise.
+     */
+    holdUplink(): void {
+      uplinkHeld = true;
+    },
+    async releaseUplink(): Promise<void> {
+      uplinkHeld = false;
+      for (const { deliver } of uplink.splice(0)) await deliver();
+    },
+    /** What the server does when the database refuses a store (retrying with backoff). */
+    reportSaveFailing(workbookId: string): void {
+      hocuspocus.documents
+        .get(workbookId)
+        ?.broadcastStateless(JSON.stringify({ type: "saveFailing" } satisfies CollabNotice));
+    },
+    /** ...and when a retry succeeds again. */
+    reportSaveRecovered(workbookId: string): void {
+      hocuspocus.documents
+        .get(workbookId)
+        ?.broadcastStateless(JSON.stringify({ type: "saveRecovered" } satisfies CollabNotice));
     },
   };
 }
