@@ -1,7 +1,28 @@
 import type { Page, WebSocketRoute } from "@playwright/test";
 import { Hocuspocus, type WebSocketLike } from "@hocuspocus/server";
 import * as Y from "yjs";
-import { createEmptyWorkbook, isWorkbookInitialized } from "@worksheet-clone/shared";
+import {
+  createEmptyWorkbook,
+  diffSheetNames,
+  isWorkbookInitialized,
+  readSheetNames,
+  setSheetName,
+  type CollabNotice,
+} from "@worksheet-clone/shared";
+import { me } from "./workbooks";
+
+/** Who a change or notice is attributed to; the server derives this from the session. */
+export interface Author {
+  userId: string;
+  email: string;
+}
+
+export const BOB: Author = {
+  userId: "00000000-0000-4000-8000-0000000000b0",
+  email: "bob@example.com",
+};
+
+const PAGE_USER: Author = { userId: me.id, email: me.email };
 
 export type CollabAccess = "read-write" | "readonly" | "denied";
 
@@ -10,6 +31,10 @@ export type CollabAccess = "read-write" | "readonly" | "denied";
 // backend, no database, and nothing protocol-specific to maintain here.
 export async function mockCollab(page: Page, options: { access: CollabAccess }) {
   const storage = new Map<string, Uint8Array>();
+  // Like the real server's sheet-rename notice extension: remember each
+  // document's sheet names and broadcast a `sheetRenamed` stateless notice,
+  // attributed to the connection's context, whenever a change renames a sheet.
+  const nameSnapshots = new Map<string, Map<string, string>>();
   const hocuspocus = new Hocuspocus({
     quiet: true,
     async onAuthenticate({ connectionConfig }) {
@@ -18,6 +43,28 @@ export async function mockCollab(page: Page, options: { access: CollabAccess }) 
         throw Object.assign(new Error(""), { reason: "forbidden" });
       }
       connectionConfig.readOnly = options.access === "readonly";
+      return PAGE_USER;
+    },
+    async afterLoadDocument({ document, documentName }) {
+      nameSnapshots.set(documentName, readSheetNames(document));
+    },
+    async afterUnloadDocument({ documentName }) {
+      nameSnapshots.delete(documentName);
+    },
+    async onChange({ document, documentName, context }) {
+      const after = readSheetNames(document);
+      const before = nameSnapshots.get(documentName);
+      nameSnapshots.set(documentName, after);
+      const by = context as Partial<Author> | undefined;
+      if (!before || !by?.userId || !by.email) return;
+      for (const rename of diffSheetNames(before, after)) {
+        const notice: CollabNotice = {
+          type: "sheetRenamed",
+          by: { userId: by.userId, email: by.email },
+          ...rename,
+        };
+        document.broadcastStateless(JSON.stringify(notice));
+      }
     },
     // Persist like the real server (load stored state, seed and store only
     // when there is none). Without this, a doc unloaded after a disconnect
@@ -61,10 +108,30 @@ export async function mockCollab(page: Page, options: { access: CollabAccess }) 
 
   return {
     /** A collaborator editing the same workbook through the server. */
-    async remoteEdit(workbookId: string, change: (doc: Y.Doc) => void): Promise<void> {
-      const direct = await hocuspocus.openDirectConnection(workbookId);
+    async remoteEdit(
+      workbookId: string,
+      change: (doc: Y.Doc) => void,
+      author: Author = BOB,
+    ): Promise<void> {
+      const direct = await hocuspocus.openDirectConnection(workbookId, author);
       await direct.transact(change);
       await direct.disconnect();
+    },
+    /** A collaborator renames a tab; every connected page receives the same notice the server sends. */
+    async renameSheet(
+      workbookId: string,
+      sheetId: string,
+      name: string,
+      author: Author = BOB,
+    ): Promise<void> {
+      const direct = await hocuspocus.openDirectConnection(workbookId, author);
+      await direct.transact((doc) => setSheetName(doc, sheetId, name));
+      await direct.disconnect();
+    },
+    /** What the server does after a successful PATCH /api/workbooks/:id. */
+    broadcastWorkbookRenamed(workbookId: string, by: Author, from: string, to: string): void {
+      const notice: CollabNotice = { type: "workbookRenamed", by, from, to };
+      hocuspocus.documents.get(workbookId)?.broadcastStateless(JSON.stringify(notice));
     },
     /** The server's copy of the document (in memory, else last stored). */
     serverDoc(workbookId: string): Y.Doc | undefined {

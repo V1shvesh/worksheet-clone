@@ -30,6 +30,7 @@ export async function mockWorkbooks(
   page: Page,
   initial: MockWorkbook[],
   knownUsers: string[] = [],
+  hooks: { onRenamed?: (id: string, from: string, to: string) => void } = {},
 ) {
   const store = new Map(initial.map((w) => [w.summary.id, w]));
   let nextId = 100;
@@ -63,6 +64,20 @@ export async function mockWorkbooks(
       }
       store.delete(id);
       return route.fulfill({ status: 204, body: "" });
+    }
+    if (route.request().method() === "PATCH") {
+      if (entry.summary.role !== "owner") {
+        return route.fulfill(
+          json(403, {
+            error: { code: "FORBIDDEN", message: "You don't have permission to do that" },
+          }),
+        );
+      }
+      const { name } = route.request().postDataJSON() as { name: string };
+      const from = entry.summary.name;
+      entry.summary = { ...entry.summary, name: name.trim() };
+      hooks.onRenamed?.(id, from, entry.summary.name);
+      return route.fulfill(json(200, { workbook: entry.summary }));
     }
     return route.fulfill(json(200, { workbook: entry.summary }));
   });
