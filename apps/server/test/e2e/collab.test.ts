@@ -4,6 +4,13 @@ import {
   addSheet,
   deleteSheet,
   getCell,
+  deleteRows,
+  insertRows,
+  readColOrder,
+  readRowOrder,
+  encodeFormula,
+  decodeFormula,
+  formatSheetPrefix,
   getSheetName,
   readSheetOrder,
   setCell,
@@ -284,6 +291,102 @@ describe("realtime collaboration (real server, real Postgres)", { timeout: 30_00
       await settle();
 
       expect(ownerNotices).toEqual([]);
+    });
+  });
+  describe("row structure operations", () => {
+    async function pair() {
+      const alice = await newUser("alice");
+      const bob = await newUser("bob");
+      const workbookId = await createWorkbook(alice, "Structure");
+      await share(alice, workbookId, bob, "editor");
+      const a = await open(alice, workbookId);
+      const b = await open(bob, workbookId);
+      const [sheetId = ""] = readSheetOrder(a.doc);
+      return { alice, bob, workbookId, a, b, sheetId };
+    }
+
+    it("an insert above a row and a concurrent edit of that row converge, and survive a restart", async () => {
+      const { alice, workbookId, a, b, sheetId } = await pair();
+      const rows = readRowOrder(a.doc, sheetId);
+      const row5 = rows[4] ?? "";
+      const colB = readColOrder(a.doc, sheetId)[1] ?? "";
+
+      // Genuinely concurrent: B is detached from the socket (so it neither sends
+      // nor receives) while A inserts and the server stores the insert. B then
+      // edits B5 without knowing about the new row, and re-attaches.
+      b.provider.detach();
+      let inserted: string[] | null = null;
+      a.doc.transact(() => {
+        inserted = insertRows(a.doc, sheetId, 4, 1);
+      });
+      await waitFor(() => !a.provider.hasUnsyncedChanges);
+      expect(readRowOrder(b.doc, sheetId)).toHaveLength(100); // B really has not seen it
+      setCell(b.doc, sheetId, row5, colB, { v: "B's value" });
+      b.provider.attach();
+
+      const insertedId = (inserted as string[] | null)?.[0] ?? "";
+      expect(insertedId).not.toBe("");
+      for (const client of [a, b]) {
+        await waitFor(() => readRowOrder(client.doc, sheetId).length === 101);
+        await waitFor(() => getCell(client.doc, sheetId, row5, colB)?.v === "B's value");
+        const order = readRowOrder(client.doc, sheetId);
+        expect(order[4]).toBe(insertedId);
+        expect(order[5]).toBe(row5);
+        expect(getCell(client.doc, sheetId, insertedId, colB)).toBeUndefined();
+      }
+      await waitFor(() => !b.provider.hasUnsyncedChanges && !a.provider.hasUnsyncedChanges);
+
+      // The server's copy: a fresh client sees the same, also after a restart.
+      const fresh = await open(alice, workbookId);
+      expect(readRowOrder(fresh.doc, sheetId)[5]).toBe(row5);
+      expect(getCell(fresh.doc, sheetId, row5, colB)).toEqual({ v: "B's value" });
+      await stack.restartServer();
+      clients.splice(0).forEach((client) => client.destroy());
+      const reloaded = await open(alice, workbookId);
+      const order = readRowOrder(reloaded.doc, sheetId);
+      expect(order[4]).toBe(insertedId);
+      expect(order[5]).toBe(row5);
+      expect(getCell(reloaded.doc, sheetId, order[5] ?? "", colB)).toEqual({ v: "B's value" });
+      expect(getCell(reloaded.doc, sheetId, order[4] ?? "", colB)).toBeUndefined();
+    });
+
+    it("deleting a row inside a SUM range shrinks the range identically for everyone", async () => {
+      const { a, b, sheetId } = await pair();
+      const rows = readRowOrder(a.doc, sheetId);
+      const cols = readColOrder(a.doc, sheetId);
+      const rowId = (i: number) => rows[i] ?? "";
+      const colId = (j: number) => cols[j] ?? "";
+      const encodeCtx = {
+        sheetId,
+        sheetIdByName: () => undefined,
+        resolver: () => ({ rowId, colId }),
+      };
+      setCell(a.doc, sheetId, rowId(0), colId(3), {
+        f: encodeFormula("=SUM(A1:A3)", encodeCtx),
+      });
+      await waitFor(() => getCell(b.doc, sheetId, rowId(0), colId(3)) !== undefined);
+
+      a.doc.transact(() => {
+        expect(deleteRows(a.doc, sheetId, [rowId(2)])).toBe(true);
+      });
+
+      const expected = encodeFormula("=SUM(A1:A2)", encodeCtx);
+      for (const client of [a, b]) {
+        await waitFor(() => !readRowOrder(client.doc, sheetId).includes(rowId(2)));
+        await waitFor(() => getCell(client.doc, sheetId, rowId(0), colId(3))?.f === expected);
+        const rowsNow = readRowOrder(client.doc, sheetId);
+        const stored = getCell(client.doc, sheetId, rowId(0), colId(3))?.f ?? "";
+        expect(
+          decodeFormula(stored, {
+            sheetId,
+            lookup: () => ({
+              rowIndex: (id) => (rowsNow.includes(id) ? rowsNow.indexOf(id) : undefined),
+              colIndex: (id) => (cols.includes(id) ? cols.indexOf(id) : undefined),
+            }),
+            sheetPrefix: (id) => formatSheetPrefix(id),
+          }),
+        ).toBe("=SUM(A1:A2)");
+      }
     });
   });
 });
