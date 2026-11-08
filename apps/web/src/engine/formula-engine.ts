@@ -1,4 +1,11 @@
-import { HyperFormula, type CellValue, type ExportedChange } from "hyperformula";
+import {
+  CellError,
+  DetailedCellError,
+  ErrorType,
+  HyperFormula,
+  type CellValue,
+  type ExportedChange,
+} from "hyperformula";
 import type * as Y from "yjs";
 import {
   decodeFormula,
@@ -73,10 +80,29 @@ function indexOf(ids: string[]): Map<string, number> {
   return new Map(ids.map((id, i) => [id, i]));
 }
 
-export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
+export interface FormulaEngineOptions {
+  /** Test seam: an engine instance to use instead of a fresh HyperFormula (e.g. one rigged to throw). */
+  hyperFormula?: HyperFormula;
+}
+
+/** A burst of failures (one per transaction while the engine is broken) is logged once per this long. */
+const LOG_BURST_MS = 2000;
+
+export function createFormulaEngine(doc: Y.Doc, options: FormulaEngineOptions = {}): FormulaEngine {
   // evaluateNullToZero: a reference to an empty cell is 0, as in Excel and
   // Google Sheets (HyperFormula's default shows it as empty).
-  const hf = HyperFormula.buildEmpty({ licenseKey: "gpl-v3", evaluateNullToZero: true });
+  const hf =
+    options.hyperFormula ??
+    HyperFormula.buildEmpty({ licenseKey: "gpl-v3", evaluateNullToZero: true });
+  // Sheets HyperFormula couldn't load: their cells read as #ERROR! until a later reload works.
+  const failed = new Set<string>();
+  let lastLogged = -Infinity;
+  function report(message: string, error: unknown): void {
+    const now = Date.now();
+    if (now - lastLogged < LOG_BURST_MS) return;
+    lastLogged = now;
+    console.error(message, error);
+  }
   // The HF sheet name is our sheet id, so renames never touch the engine.
   const sheets = new Map<string, SheetState>();
   const sheetIdByHfId = new Map<number, string>();
@@ -115,28 +141,40 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
 
   function loadSheet(sheetId: string): void {
     const existing = sheets.get(sheetId);
-    const rowArray = getRowOrderArray(doc, sheetId);
-    const colArray = getColOrderArray(doc, sheetId);
     const index: SheetIndex = {
       rows: indexOf(readRowOrder(doc, sheetId)),
       cols: indexOf(readColOrder(doc, sheetId)),
     };
-    const content = buildContent(sheetId, index);
-    let hfId: number;
-    if (existing) {
-      hfId = existing.hfId;
-    } else {
-      hfId = hf.getSheetId(hf.addSheet(sheetId))!;
-      sheetIdByHfId.set(hfId, sheetId);
-    }
-    hf.setSheetContent(hfId, content);
+    // A failed earlier attempt may have added the sheet to HyperFormula without recording it.
+    let hfId = existing?.hfId ?? hf.getSheetId(sheetId);
+    if (hfId === undefined) hfId = hf.getSheetId(hf.addSheet(sheetId))!;
+    sheetIdByHfId.set(hfId, sheetId);
+    // Recorded before the content is set: if that throws, the sheet still exists for the
+    // grid (showing #ERROR!) and the next transaction retries the reload.
     sheets.set(sheetId, {
       hfId,
       ...index,
       cellsMap: getCellsMap(doc, sheetId),
-      rowArray,
-      colArray,
+      rowArray: getRowOrderArray(doc, sheetId),
+      colArray: getColOrderArray(doc, sheetId),
     });
+    try {
+      hf.setSheetContent(hfId, buildContent(sheetId, index));
+    } catch (error) {
+      failed.add(sheetId);
+      throw error;
+    }
+    failed.delete(sheetId);
+  }
+
+  /** loadSheet that never throws: a sheet that can't load is marked failed (cells show #ERROR!). */
+  function loadSheetSafely(sheetId: string): void {
+    try {
+      loadSheet(sheetId);
+    } catch (error) {
+      failed.add(sheetId);
+      report(`Formula engine could not load sheet ${sheetId}; its cells show #ERROR!`, error);
+    }
   }
 
   function removeSheet(sheetId: string): void {
@@ -180,7 +218,42 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
   }
 
   function emit(event: EngineEvent): void {
-    for (const listener of [...listeners]) listener(event);
+    // A throwing listener must not stop the others, nor escape into Yjs's observer chain.
+    for (const listener of [...listeners]) {
+      try {
+        listener(event);
+      } catch (error) {
+        report("Formula engine listener failed", error);
+      }
+    }
+  }
+
+  /** Sheets whose engine state a failed transaction may have left wrong: the changed ones and their dependants. */
+  function affectedSheets(tr: Y.Transaction, sheetSetChanged: boolean): string[] {
+    const order = readSheetOrder(doc);
+    if (sheetSetChanged) return order;
+    const changed = new Set<string>();
+    for (const [sheetId, state] of sheets) {
+      if (
+        isChanged(tr, state.cellsMap) ||
+        isChanged(tr, state.rowArray) ||
+        isChanged(tr, state.colArray) ||
+        failed.has(sheetId)
+      ) {
+        changed.add(sheetId);
+      }
+    }
+    const affected = new Set(changed);
+    for (const [sheetId, state] of sheets) {
+      if (affected.has(sheetId)) continue;
+      for (const data of state.cellsMap.values()) {
+        if (data.f !== undefined && [...referencedSheetIds(data.f)].some((id) => changed.has(id))) {
+          affected.add(sheetId);
+          break;
+        }
+      }
+    }
+    return order.filter((id) => affected.has(id));
   }
 
   function groupChanges(
@@ -234,7 +307,11 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
         }
         for (const [sheetId, state] of sheets) {
           if (rebuilt.has(sheetId)) continue;
-          if (isChanged(tr, state.rowArray) || isChanged(tr, state.colArray)) {
+          if (
+            failed.has(sheetId) ||
+            isChanged(tr, state.rowArray) ||
+            isChanged(tr, state.colArray)
+          ) {
             loadSheet(sheetId);
             rebuilt.add(sheetId);
             continue;
@@ -260,15 +337,15 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
         if (rebuilt.size > 0 && sheets.size > 1) redecodeReferences(rebuilt, touched);
       });
     } catch (error) {
-      // The engine must never take the grid down; fall back to a full reload.
-      console.error("Formula engine update failed; rebuilding", error);
-      try {
-        for (const id of readSheetOrder(doc)) {
-          loadSheet(id);
-          rebuilt.add(id);
-        }
-      } catch (fatal) {
-        console.error("Formula engine rebuild failed", fatal);
+      // The engine must never take the grid down, nor throw into Yjs's observer chain (that
+      // would skip other observers and the transaction cleanup): reload the affected sheets one
+      // by one; one that still fails shows #ERROR! instead of taking the others with it.
+      report("Formula engine update failed; reloading the affected sheets", error);
+      changes = [];
+      touched.clear();
+      for (const id of affectedSheets(tr, sheetSetChanged)) {
+        loadSheetSafely(id);
+        rebuilt.add(id);
       }
     }
     for (const sheetId of rebuilt) emit({ type: "rebuilt", sheetId });
@@ -277,7 +354,7 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
     }
   }
 
-  for (const id of readSheetOrder(doc)) loadSheet(id);
+  for (const id of readSheetOrder(doc)) loadSheetSafely(id);
   lookupCache = new Map();
   doc.on("afterTransaction", onAfterTransaction);
 
@@ -285,6 +362,8 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
     getValue(sheetId, row, col) {
       const state = sheets.get(sheetId);
       if (!state || row < 0 || col < 0) return null;
+      if (failed.has(sheetId))
+        return new DetailedCellError(new CellError(ErrorType.ERROR), "#ERROR!");
       try {
         return hf.getCellValue({ sheet: state.hfId, row, col });
       } catch {
