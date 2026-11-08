@@ -7,6 +7,8 @@ Format: `- YYYY-MM-DD · area · what happened → why → what to check next ti
 
 <!-- entries below, newest first -->
 
+- 2026-11-08 · M5 real-browser check script · my three-user script reported the cross-sheet formula, `#REF!` after delete and persistence as broken, but the app was fine: "add sheet" opens the new sheet (as specified), so the script typed `=Data!A1*2` into Data!A1 itself and the collaborator then overwrote that same cell; separately, `timeout 120 node script.mjs; rm script.mjs` deleted the script unrun because macOS has no `timeout` → I wrote the script from the old flow without re-reading the spec I had approved, and chained a cleanup with `;` → rerun with the right sheet passed every check → in browser scripts, assert where you are (active tab/URL) before typing, and chain cleanup with `&&` or run it separately.
+
 - 2026-11-08 · M5 e2e, `vite preview` serves a stale build · I ran a mutation check (disable the own-notice filter, rerun the spec) with a direct `playwright test`, and it only went red because I had also run `pnpm build` by hand; the Playwright web server previews `dist/`, so a bare `playwright test` tests whatever was last built, not the source → after restoring the code the dist still held the mutant until rebuilt → for mutation checks rebuild before and after (or use `pnpm test:e2e:web`, which builds), and rerun the full suite once the mutation is reverted.
 - 2026-11-08 · M5 shell patching, again · `sed -i '/pattern/d' file` failed on macOS (BSD sed reads the pattern as the backup suffix), the same trap as the codec commit's entry → muscle memory beat the log → use a Python one-liner or the Edit tool for every in-place edit; do not reach for `sed -i` at all in this repo.
 
