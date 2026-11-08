@@ -233,3 +233,36 @@ describe("resetDoc", () => {
     expect(fresh.config.document.getMap("scratch").get("a")).toBeUndefined();
   });
 });
+
+describe("opening as a viewer", () => {
+  it("never loads an on-device copy (it could only hold edits the server drops) and deletes it", async () => {
+    // A copy left behind by an editor session whose unsent edit the server will refuse now.
+    const { IndexeddbPersistence } = await import("y-indexeddb");
+    const stale = new Y.Doc();
+    const persistence = new IndexeddbPersistence("worksheet:u-7:wb-1", stale);
+    await persistence.whenSynced;
+    stale.getMap("scratch").set("unsent", 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await persistence.destroy();
+    expect(await dbNames()).toContain("worksheet:u-7:wb-1");
+
+    const store = createStore();
+    await store.dispatch(
+      authApi.util.upsertQueryData("me", undefined, {
+        user: { id: "u-7", email: "a@b.c" },
+      } as never),
+    );
+    render(
+      <Provider store={store}>
+        <WorkbookDocProvider workbookId="wb-1" role="viewer">
+          <span />
+        </WorkbookDocProvider>
+      </Provider>,
+    );
+    await waitFor(() => expect(providers).toHaveLength(1));
+    await waitFor(async () => expect(await dbNames()).not.toContain("worksheet:u-7:wb-1"));
+    const doc = providers[0]!.config.document;
+    expect(doc.getMap("scratch").get("unsent")).toBeUndefined();
+    expect(store.getState().collab.cacheLoaded).toBe(false);
+  });
+});

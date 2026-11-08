@@ -24,7 +24,7 @@ export function WorkbookPage() {
         <>
           {/* Only connect once REST has confirmed membership. The header is inside the
               provider because it shows who else is connected. */}
-          <WorkbookDocProvider workbookId={workbook.id}>
+          <WorkbookDocProvider workbookId={workbook.id} role={workbook.role}>
             <WorkbookHeader workbook={workbook} />
             <PresencePublisher />
             <Toolbar />

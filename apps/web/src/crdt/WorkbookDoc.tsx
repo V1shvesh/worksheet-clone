@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useDispatch, useSelector, useStore } from "react-redux";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
+import type { Role } from "@worksheet-clone/shared";
 import type { AppDispatch, RootState } from "../app/store";
 import { handleCollabNotice } from "./handleCollabNotice";
 import { authApi } from "../features/auth/authApi";
@@ -44,9 +45,12 @@ export function collabUrl(location: Pick<Location, "protocol" | "host">): string
  */
 export function WorkbookDocProvider({
   workbookId,
+  role,
   children,
 }: {
   workbookId: string;
+  /** The role REST reported when the page opened; a viewer never uses the on-device copy. */
+  role?: Role;
   children: ReactNode;
 }) {
   const dispatch = useDispatch<AppDispatch>();
@@ -60,6 +64,8 @@ export function WorkbookDocProvider({
   const [epoch, setEpoch] = useState(0);
   const resetRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const access = useSelector((state: RootState) => state.collab.access);
+  const roleRef = useRef(role);
+  roleRef.current = role;
   // The undo manager reads access when you press undo, not when it was created.
   const readOnlyRef = useRef(true);
   readOnlyRef.current = access !== "read-write";
@@ -81,7 +87,13 @@ export function WorkbookDocProvider({
     // The cache is applied with its own origin (not LOCAL_ORIGIN), so undo never records it, and
     // the provider forwards it to the server like any other local change.
     const userId = authApi.endpoints.me.select()(store.getState()).data?.user.id;
-    const cache = userId ? openOfflineCache(ydoc, userId, workbookId) : null;
+    // A viewer can't write, so an on-device copy can only hold edits the server will drop (e.g. made
+    // before a demotion that happened while the tab was closed). Loading it would leave those edits
+    // in this replica forever, diverging from everyone else, so viewers start from the server and
+    // the stale copy is deleted. The role is read once: a later role change remounts nothing.
+    const isViewer = roleRef.current === "viewer";
+    if (userId && isViewer) void clearWorkbookCache(userId, workbookId);
+    const cache = userId && !isViewer ? openOfflineCache(ydoc, userId, workbookId) : null;
     const tracker = new DirtyTracker();
     let lastCloseReason: string | undefined;
     // Stops persisting and wipes the on-device copy: used when the user may no longer keep this
