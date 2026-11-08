@@ -58,7 +58,9 @@ describe("parseTsv", () => {
     fc.assert(
       fc.property(
         fc.array(fc.string({ unit: "binary" }), { minLength: 1, maxLength: 5 }),
-        (cells) => expect(parseTsv(serializeTsv([cells]))).toEqual([cells]),
+        (cells) => {
+          expect(parseTsv(serializeTsv([cells]))).toEqual([cells]);
+        },
       ),
     );
   });
