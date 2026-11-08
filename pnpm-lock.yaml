@@ -164,6 +164,9 @@ importers:
       '@worksheet-clone/config':
         specifier: workspace:*
         version: file:packages/config(typescript@5.9.3)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
       jsdom:
         specifier: ^25.0.0
         version: 25.0.1
