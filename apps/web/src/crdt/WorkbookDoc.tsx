@@ -1,16 +1,19 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import * as Y from "yjs";
 import type { RootState } from "../app/store";
 import { handleCollabNotice } from "./handleCollabNotice";
 import { authApi } from "../features/auth/authApi";
 import { collabActions } from "./collabSlice";
+import { createWorkbookUndo, type WorkbookUndo } from "./undo";
 
 interface WorkbookDocValue {
   doc: Y.Doc;
   /** True until the server has confirmed read-write access. */
   readOnly: boolean;
+  /** This user's undo history for the doc (absent only in tests that don't need it). */
+  undo?: WorkbookUndo;
 }
 
 export const WorkbookDocContext = createContext<WorkbookDocValue | null>(null);
@@ -32,11 +35,21 @@ export function WorkbookDocProvider({
 }) {
   const dispatch = useDispatch();
   const store = useStore<RootState>();
-  const [doc, setDoc] = useState<Y.Doc | null>(null);
+  const [open, setOpen] = useState<{ doc: Y.Doc; undo: WorkbookUndo } | null>(null);
   const access = useSelector((state: RootState) => state.collab.access);
+  // The undo manager reads access when you press undo, not when it was created.
+  const readOnlyRef = useRef(true);
+  readOnlyRef.current = access !== "read-write";
 
   useEffect(() => {
     const ydoc = new Y.Doc();
+    const undo = createWorkbookUndo(ydoc, {
+      isReadOnly: () => readOnlyRef.current,
+      getContext: () => {
+        const { sheetId, selection } = store.getState().grid;
+        return { sheetId, selection };
+      },
+    });
     dispatch(collabActions.opened(workbookId));
 
     const provider = new HocuspocusProvider({
@@ -55,21 +68,24 @@ export function WorkbookDocProvider({
           currentUserId: () => authApi.endpoints.me.select()(store.getState()).data?.user.id,
         }),
     });
-    setDoc(ydoc);
+    setOpen({ doc: ydoc, undo });
 
     return () => {
       provider.destroy();
+      undo.destroy();
       ydoc.destroy();
-      setDoc(null);
+      setOpen(null);
       dispatch(collabActions.closed());
     };
   }, [workbookId, dispatch, store]);
 
-  if (!doc) {
+  if (!open) {
     return null;
   }
   return (
-    <WorkbookDocContext.Provider value={{ doc, readOnly: access !== "read-write" }}>
+    <WorkbookDocContext.Provider
+      value={{ doc: open.doc, undo: open.undo, readOnly: access !== "read-write" }}
+    >
       {children}
     </WorkbookDocContext.Provider>
   );
