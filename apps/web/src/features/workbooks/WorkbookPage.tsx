@@ -22,9 +22,10 @@ export function WorkbookPage() {
       {isError && !workbook && <p role="alert">{getApiErrorMessage(error)}</p>}
       {workbook && (
         <>
-          <WorkbookHeader workbook={workbook} />
-          {/* Only connect once REST has confirmed membership. */}
+          {/* Only connect once REST has confirmed membership. The header is inside the
+              provider because it shows who else is connected. */}
           <WorkbookDocProvider workbookId={workbook.id}>
+            <WorkbookHeader workbook={workbook} />
             <PresencePublisher />
             <Toolbar />
             <AccessBanner workbookName={workbook.name} />

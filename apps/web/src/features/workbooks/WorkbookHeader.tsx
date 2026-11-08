@@ -2,11 +2,12 @@ import { useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { renameWorkbookSchema, type WorkbookSummary } from "@worksheet-clone/shared";
 import { getApiErrorMessage } from "../../app/apiErrors";
+import { PresenceAvatars } from "../presence/PresenceAvatars";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { MembersDialog } from "./MembersDialog";
 import { useRenameWorkbookMutation } from "./workbooksApi";
 
-/** Back link, workbook name (owners rename inline), connection status, role and the owner's Share button. */
+/** Back link, workbook name (owners rename inline), connection status, who else is here, role and the owner's Share button. */
 export function WorkbookHeader({ workbook }: { workbook: WorkbookSummary }) {
   const isOwner = workbook.role === "owner";
   const [sharing, setSharing] = useState(false);
@@ -18,6 +19,7 @@ export function WorkbookHeader({ workbook }: { workbook: WorkbookSummary }) {
       </Link>
       {isOwner ? <EditableName workbook={workbook} /> : <h1>{workbook.name}</h1>}
       <ConnectionStatus />
+      <PresenceAvatars />
       <p className="workbook-header-role">Your role: {workbook.role}</p>
       {isOwner && (
         <button type="button" onClick={() => setSharing(true)}>
