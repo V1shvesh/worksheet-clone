@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { getSheetName, readSheetOrder, setSheetName } from "@worksheet-clone/shared";
 import { mockCollab, type CollabAccess } from "./fixtures/collab";
 import { mockApiFallback, mockSession } from "./fixtures/session";
+import { SheetTabsPage } from "./pages/sheet-tabs-page";
 import { me, mockWorkbooks, workbook } from "./fixtures/workbooks";
 
 const workbookId = "00000000-0000-4000-8000-000000000021";
@@ -18,15 +19,12 @@ async function openWorkbook(page: Page, access: CollabAccess) {
 }
 
 const connection = (page: Page) => page.getByRole("status", { name: "Connection" });
-const sheets = (page: Page) => page.getByRole("list", { name: "Sheets" });
-const sheetNameField = (page: Page) => page.getByLabel("First sheet name");
-
 test("connects and shows the live document", async ({ page }) => {
   await openWorkbook(page, "read-write");
 
   await expect(page.getByRole("heading", { name: "Q3 budget" })).toBeVisible();
   await expect(connection(page)).toHaveText("Live");
-  await expect(sheets(page)).toHaveText("Sheet1");
+  await new SheetTabsPage(page).expectNames(["Sheet1"]);
 });
 
 test("a collaborator's rename appears live", async ({ page }) => {
@@ -37,18 +35,17 @@ test("a collaborator's rename appears live", async ({ page }) => {
     setSheetName(doc, readSheetOrder(doc)[0] ?? "", "Renamed by Bob");
   });
 
-  await expect(sheets(page)).toHaveText("Renamed by Bob");
-  await expect(sheetNameField(page)).toHaveValue("Renamed by Bob");
+  await new SheetTabsPage(page).expectNames(["Renamed by Bob"]);
 });
 
 test("a local rename reaches the server", async ({ page }) => {
   const collab = await openWorkbook(page, "read-write");
   await expect(connection(page)).toHaveText("Live");
 
-  await sheetNameField(page).fill("Forecast");
-  await sheetNameField(page).press("Enter");
+  const tabs = new SheetTabsPage(page);
+  await tabs.rename("Sheet1", "Forecast");
 
-  await expect(sheets(page)).toHaveText("Forecast");
+  await tabs.expectNames(["Forecast"]);
   await expect
     .poll(() => {
       const doc = collab.serverDoc(workbookId);
@@ -60,13 +57,12 @@ test("a local rename reaches the server", async ({ page }) => {
 test("a viewer is view-only and can't change the document", async ({ page }) => {
   const collab = await openWorkbook(page, "readonly");
   await expect(connection(page)).toHaveText("Live · View only");
-  await expect(sheetNameField(page)).toHaveAttribute("readonly", "");
 
-  await sheetNameField(page).click();
-  await page.keyboard.type("Sneaky");
-  await page.keyboard.press("Enter");
+  const tabs = new SheetTabsPage(page);
+  await tabs.tab("Sheet1").dblclick();
+  await expect(tabs.renameInput()).toHaveCount(0);
+  await expect(tabs.addButton()).toHaveCount(0);
 
-  await expect(sheetNameField(page)).toHaveValue("Sheet1");
   const doc = collab.serverDoc(workbookId);
   expect(doc && getSheetName(doc, readSheetOrder(doc)[0] ?? "")).toBe("Sheet1");
 });
@@ -90,5 +86,5 @@ test("recovers after the connection drops", async ({ page }) => {
     setSheetName(doc, readSheetOrder(doc)[0] ?? "", "Changed while offline");
   });
   await expect(connection(page)).toHaveText("Live", { timeout: 10_000 });
-  await expect(sheets(page)).toHaveText("Changed while offline");
+  await new SheetTabsPage(page).expectNames(["Changed while offline"]);
 });
