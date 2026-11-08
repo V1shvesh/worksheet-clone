@@ -30,4 +30,11 @@ describe("handleCollabNotice", () => {
     expect(run("{")).not.toHaveBeenCalled();
     expect(run('{"type":"x"}')).not.toHaveBeenCalled();
   });
+
+  it("flips the save-failing flag without a toast", () => {
+    const failing = run('{"type":"saveFailing"}');
+    expect(failing.mock.calls).toEqual([[{ type: "collab/saveFailed", payload: undefined }]]);
+    const recovered = run('{"type":"saveRecovered"}');
+    expect(recovered.mock.calls).toEqual([[{ type: "collab/saveRecovered", payload: undefined }]]);
+  });
 });

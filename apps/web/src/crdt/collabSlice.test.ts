@@ -60,3 +60,14 @@ describe("collab slice sync state", () => {
     });
   });
 });
+
+describe("collab slice save-failing flag", () => {
+  it("is cleared when the socket drops (the server repeats it on reconnect)", () => {
+    let state = collabSlice.reducer(undefined, collabActions.opened("w1"));
+    state = collabSlice.reducer(state, collabActions.saveFailed());
+    state = collabSlice.reducer(state, collabActions.statusChanged("connected"));
+    expect(state.saveFailing).toBe(true);
+    state = collabSlice.reducer(state, collabActions.statusChanged("disconnected"));
+    expect(state.saveFailing).toBe(false);
+  });
+});

@@ -69,6 +69,8 @@ export const collabSlice = createSlice({
       if (action.payload !== "connected") {
         state.synced = false;
       }
+      // The server repeats saveFailing to every new connection, so a stale flag can't outlive a drop.
+      if (action.payload === "disconnected") state.saveFailing = false;
     },
     syncedChanged(state, action: PayloadAction<boolean>) {
       state.synced = action.payload;
