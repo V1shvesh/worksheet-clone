@@ -19,6 +19,7 @@ function setup(opts: { readOnly?: boolean } = {}) {
   const { doc, sheetId } = newDoc();
   const store = createStore();
   const view = new FakeGridView();
+  const engine = createFormulaEngine(doc);
   let localTransactions = 0;
   doc.on("afterTransaction", (tr: Y.Transaction) => {
     if (tr.origin === LOCAL_ORIGIN) localTransactions++;
@@ -26,13 +27,13 @@ function setup(opts: { readOnly?: boolean } = {}) {
   const tree = (readOnly: boolean) => (
     <Provider store={store}>
       <WorkbookDocContext.Provider value={{ doc, readOnly }}>
-        <GridContainer sheetId={sheetId} createView={() => view} />
+        <GridContainer sheetId={sheetId} engine={engine} createView={() => view} />
       </WorkbookDocContext.Provider>
     </Provider>
   );
   const utils = render(tree(opts.readOnly ?? false));
   // A second model over the same doc, only to translate ids for assertions.
-  const model = new SheetViewModel(doc, sheetId, createFormulaEngine(doc));
+  const model = new SheetViewModel(doc, sheetId, engine);
   return {
     doc,
     sheetId,

@@ -4,8 +4,8 @@ import type { RootState } from "../../app/store";
 import { useSheetOrder } from "../../crdt/useDocValue";
 
 // AG Grid and HyperFormula are heavy; they load only once a workbook is opened.
-const GridContainer = lazy(() =>
-  import("../grid/GridContainer").then((m) => ({ default: m.GridContainer })),
+const WorkbookGrid = lazy(() =>
+  import("../grid/WorkbookGrid").then((m) => ({ default: m.WorkbookGrid })),
 );
 
 /** The first sheet's grid, once the document has synced (before that it has no sheets). */
@@ -16,7 +16,7 @@ export function LiveGrid() {
   return (
     <div className="workbook-page-grid">
       <Suspense fallback={<p className="workbook-page-grid-loading">Loading grid…</p>}>
-        <GridContainer key={firstSheetId} sheetId={firstSheetId} />
+        <WorkbookGrid sheetId={firstSheetId} />
       </Suspense>
     </div>
   );

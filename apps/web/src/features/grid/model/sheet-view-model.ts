@@ -15,7 +15,7 @@ import {
   readRowOrder,
   type CellFormat,
 } from "@worksheet-clone/shared";
-import type { EngineValue, FormulaEngine } from "../../../engine";
+import { lookupSheetIndex, type EngineValue, type FormulaEngine } from "../../../engine";
 import { parseCellInput } from "../commands/parse-cell-input";
 import type { CellCoord, CellRenderData, GridDimensions } from "../port";
 
@@ -172,14 +172,13 @@ export class SheetViewModel {
     if (data.f !== undefined) {
       return decodeFormula(data.f, {
         sheetId: this.sheetId,
-        // Own sheet only for now; cross-sheet wiring is added with the M5 web work.
         lookup: (id) =>
           id === this.sheetId
             ? {
                 rowIndex: (r) => this.rowIndexById.get(r),
                 colIndex: (c) => this.colIndexById.get(c),
               }
-            : undefined,
+            : lookupSheetIndex(this.doc, id),
         sheetPrefix: (id) => formatSheetPrefix(getSheetName(this.doc, id) ?? id),
       });
     }

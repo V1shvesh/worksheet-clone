@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDispatch, useStore } from "react-redux";
 import type { AppDispatch, RootState } from "../../app/store";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
-import { createFormulaEngine } from "../../engine";
+import type { FormulaEngine } from "../../engine";
 import { AgGridView } from "./adapters/ag-grid/ag-grid-view";
 import { createGridInteraction, type GridInteraction } from "./interaction";
 import { connectModelToView, SheetViewModel } from "./model";
@@ -12,6 +12,8 @@ import "./GridContainer.css";
 
 export interface GridContainerProps {
   sheetId: string;
+  /** The workbook's formula engine; it outlives this component (sheet switches remount the grid). */
+  engine: FormulaEngine;
   /** Adapter factory; tests inject the fake. */
   createView?: () => GridView;
 }
@@ -25,7 +27,11 @@ interface Session {
 const defaultCreateView = (): GridView => new AgGridView();
 
 /** Wires doc + formula engine + view model + adapter + interaction + overlay for one sheet. */
-export function GridContainer({ sheetId, createView = defaultCreateView }: GridContainerProps) {
+export function GridContainer({
+  sheetId,
+  engine,
+  createView = defaultCreateView,
+}: GridContainerProps) {
   const { doc, readOnly } = useWorkbookDoc();
   const dispatch = useDispatch<AppDispatch>();
   const store = useStore<RootState>();
@@ -43,7 +49,6 @@ export function GridContainer({ sheetId, createView = defaultCreateView }: GridC
   useEffect(() => {
     const el = mountEl.current;
     if (!el) return;
-    const engine = createFormulaEngine(doc);
     const model = new SheetViewModel(doc, sheetId, engine);
     const view = createViewRef.current();
     view.mount(el, model.dimensions(), (c) => model.getCell(c));
@@ -68,9 +73,8 @@ export function GridContainer({ sheetId, createView = defaultCreateView }: GridC
       disconnect();
       view.destroy();
       model.destroy();
-      engine.destroy();
     };
-  }, [doc, sheetId, dispatch, store]);
+  }, [doc, sheetId, engine, dispatch, store]);
 
   return (
     <div className="grid-container">

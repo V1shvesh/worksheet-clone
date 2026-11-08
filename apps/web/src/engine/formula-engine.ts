@@ -11,8 +11,11 @@ import {
   readColOrder,
   readRowOrder,
   readSheetOrder,
+  referencedSheetIds,
   type CellData,
+  type IdLookup,
 } from "@worksheet-clone/shared";
+import { lookupSheetIndex } from "./sheet-index";
 
 export type EngineValue = CellValue;
 
@@ -38,16 +41,12 @@ export interface FormulaEngine {
 function toRawContent(
   sheetId: string,
   data: CellData,
-  lookup: SheetIndex,
+  lookup: (sheetId: string) => IdLookup | undefined,
 ): string | number | boolean | null {
   if (data.f !== undefined) {
     return decodeFormula(data.f, {
       sheetId,
-      // Own sheet only for now; cross-sheet wiring is added with the M5 web work.
-      lookup: (id) =>
-        id === sheetId
-          ? { rowIndex: (r) => lookup.rows.get(r), colIndex: (c) => lookup.cols.get(c) }
-          : undefined,
+      lookup,
       // HyperFormula names its sheets by id, which may start with a digit: always quote.
       sheetPrefix: (id) => formatSheetPrefix(id, { alwaysQuote: true }),
     });
@@ -83,6 +82,15 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
   const sheetIdByHfId = new Map<number, string>();
   const listeners = new Set<(event: EngineEvent) => void>();
 
+  // Row/column indices of any sheet, read from the doc once per update (the
+  // doc is the truth even for sheets the engine has not reloaded yet). A
+  // formula can point into a sheet whose order changed in the same transaction.
+  let lookupCache = new Map<string, IdLookup | undefined>();
+  function lookup(id: string): IdLookup | undefined {
+    if (!lookupCache.has(id)) lookupCache.set(id, lookupSheetIndex(doc, id));
+    return lookupCache.get(id);
+  }
+
   function buildContent(
     sheetId: string,
     index: SheetIndex,
@@ -93,7 +101,7 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
       const row = index.rows.get(rowId ?? "");
       const col = index.cols.get(colId ?? "");
       if (row === undefined || col === undefined) continue; // orphan of a deleted row/column
-      const raw = toRawContent(sheetId, data, index);
+      const raw = toRawContent(sheetId, data, lookup);
       if (raw === null) continue;
       (content[row] ??= [])[col] = raw;
     }
@@ -139,6 +147,38 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
     sheets.delete(sheetId);
   }
 
+  /**
+   * Re-sets every formula outside `reindexed` whose stored text references one
+   * of those sheets. HyperFormula keeps references by sheet name, but the
+   * decoded A1 text depends on the target's row/column order, which we own.
+   */
+  function redecodeReferences(reindexed: Set<string>, touched: Map<string, EngineCell[]>): void {
+    for (const [sheetId, state] of sheets) {
+      if (reindexed.has(sheetId)) continue;
+      for (const [key, data] of state.cellsMap) {
+        if (data.f === undefined) continue;
+        let affected = false;
+        for (const id of referencedSheetIds(data.f)) {
+          if (reindexed.has(id)) {
+            affected = true;
+            break;
+          }
+        }
+        if (!affected) continue;
+        const [rowId, colId] = key.split(":");
+        const row = state.rows.get(rowId ?? "");
+        const col = state.cols.get(colId ?? "");
+        if (row === undefined || col === undefined) continue;
+        hf.setCellContents({ sheet: state.hfId, row, col }, [
+          [toRawContent(sheetId, data, lookup)],
+        ]);
+        let list = touched.get(sheetId);
+        if (!list) touched.set(sheetId, (list = []));
+        list.push({ row, col });
+      }
+    }
+  }
+
   function emit(event: EngineEvent): void {
     for (const listener of [...listeners]) listener(event);
   }
@@ -178,6 +218,7 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
     const rebuilt = new Set<string>();
     const touched = new Map<string, EngineCell[]>();
     let changes: ExportedChange[] = [];
+    lookupCache = new Map();
     try {
       changes = hf.batch(() => {
         if (sheetSetChanged) {
@@ -207,13 +248,16 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
             const col = state.cols.get(colId ?? "");
             if (row === undefined || col === undefined) continue;
             const data = state.cellsMap.get(key);
-            const raw = data ? toRawContent(sheetId, data, state) : null;
+            const raw = data ? toRawContent(sheetId, data, lookup) : null;
             hf.setCellContents({ sheet: state.hfId, row, col }, [[raw]]);
             let list = touched.get(sheetId);
             if (!list) touched.set(sheetId, (list = []));
             list.push({ row, col });
           }
         }
+        // A rebuilt sheet has new row/column indices (or just appeared), so
+        // formulas elsewhere that point into it must be decoded again.
+        if (rebuilt.size > 0 && sheets.size > 1) redecodeReferences(rebuilt, touched);
       });
     } catch (error) {
       // The engine must never take the grid down; fall back to a full reload.
@@ -234,6 +278,7 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
   }
 
   for (const id of readSheetOrder(doc)) loadSheet(id);
+  lookupCache = new Map();
   doc.on("afterTransaction", onAfterTransaction);
 
   return {
