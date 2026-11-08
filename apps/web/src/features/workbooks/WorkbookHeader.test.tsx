@@ -61,14 +61,14 @@ describe("WorkbookHeader", () => {
 
   it("shows the connection status from the collab state", () => {
     const store = renderHeader(wb("viewer"));
-    expect(screen.getByRole("status", { name: "Connection" })).toHaveTextContent("Offline");
+    expect(screen.getByRole("status", { name: "Connection" })).toHaveTextContent("Reconnecting…");
     store.dispatch(collabActions.opened("w1"));
     store.dispatch(collabActions.statusChanged("connected"));
     store.dispatch(collabActions.syncedChanged(true));
     store.dispatch(collabActions.accessChanged("read-only"));
     return waitFor(() =>
       expect(screen.getByRole("status", { name: "Connection" })).toHaveTextContent(
-        "Live · View only",
+        "All changes saved · View only",
       ),
     );
   });

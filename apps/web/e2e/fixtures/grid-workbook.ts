@@ -37,7 +37,7 @@ export async function openWorkbook(
   const grid = new GridPage(page);
   const tabs = new SheetTabsPage(page);
   await expect(grid.cell(0, 0)).toBeVisible();
-  await expect(page.getByRole("status", { name: "Connection" })).toContainText("Live");
+  await expect(page.getByRole("status", { name: "Connection" })).toContainText("All changes saved");
 
   const ids = (doc: Y.Doc, row: number, col: number, sheetId?: string) => {
     const sheet = sheetId ?? readSheetOrder(doc)[0]!;

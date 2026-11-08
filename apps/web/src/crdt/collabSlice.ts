@@ -9,6 +9,36 @@ export interface CollabState {
   status: ConnectionStatus;
   synced: boolean;
   access: CollabAccess;
+  /** True once this mount has completed a server sync (so a later drop is "reconnecting", not "connecting"). */
+  hasSynced: boolean;
+  /** The provider's count of local updates the server hasn't acknowledged. */
+  unsyncedChanges: number;
+  /** navigator.onLine. */
+  online: boolean;
+  /** The server told us it can't persist (set by the notice handler). */
+  saveFailing: boolean;
+}
+
+export type SyncStatus =
+  "saved" | "saving" | "offline" | "reconnecting" | "connecting" | "saveFailing";
+
+/**
+ * What the header indicator says. "Saved" means the server has the change:
+ * connected, synced and nothing unacknowledged. Offline wins over everything
+ * (the browser says there is no network, so a socket state is meaningless).
+ */
+export function syncStatus(
+  state: Pick<
+    CollabState,
+    "status" | "synced" | "hasSynced" | "unsyncedChanges" | "online" | "saveFailing"
+  >,
+): SyncStatus {
+  if (!state.online) return "offline";
+  if (state.status !== "connected" || !state.synced) {
+    return state.hasSynced || state.status === "disconnected" ? "reconnecting" : "connecting";
+  }
+  if (state.saveFailing) return "saveFailing";
+  return state.unsyncedChanges > 0 ? "saving" : "saved";
 }
 
 const initialState: CollabState = {
@@ -16,6 +46,10 @@ const initialState: CollabState = {
   status: "disconnected",
   synced: false,
   access: "pending",
+  hasSynced: false,
+  unsyncedChanges: 0,
+  online: true,
+  saveFailing: false,
 };
 
 // UI state about the live connection only — document content never goes in
@@ -35,6 +69,19 @@ export const collabSlice = createSlice({
     },
     syncedChanged(state, action: PayloadAction<boolean>) {
       state.synced = action.payload;
+      if (action.payload) state.hasSynced = true;
+    },
+    unsyncedChangesChanged(state, action: PayloadAction<number>) {
+      state.unsyncedChanges = action.payload;
+    },
+    onlineChanged(state, action: PayloadAction<boolean>) {
+      state.online = action.payload;
+    },
+    saveFailed(state) {
+      state.saveFailing = true;
+    },
+    saveRecovered(state) {
+      state.saveFailing = false;
     },
     accessChanged(state, action: PayloadAction<CollabAccess>) {
       state.access = action.payload;

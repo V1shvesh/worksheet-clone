@@ -25,7 +25,7 @@ async function open(page: Page, access: "read-write" | "readonly" = "read-write"
   await page.goto(`/workbooks/${workbookId}`);
   const grid = new GridPage(page);
   await expect(grid.cell(0, 0)).toBeVisible();
-  await expect(page.getByRole("status", { name: "Connection" })).toContainText("Live");
+  await expect(page.getByRole("status", { name: "Connection" })).toContainText("All changes saved");
 
   /** Server-side cell at visual (row, col), addressed by ids like a collaborator would. */
   const ids = (doc: Y.Doc, row: number, col: number) => {

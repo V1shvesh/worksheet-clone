@@ -16,6 +16,7 @@ interface FakeProviderConfig {
   onAuthenticated: (e: { scope: string }) => void;
   onAuthenticationFailed: (e: { reason: string }) => void;
   onStateless: (e: { payload: string }) => void;
+  onUnsyncedChanges: (e: { number: number }) => void;
 }
 const providers: { config: FakeProviderConfig; destroy: ReturnType<typeof vi.fn> }[] = [];
 vi.mock("@hocuspocus/provider", () => ({
@@ -145,6 +146,16 @@ describe("WorkbookDocProvider", () => {
 
     act(() => provider?.config.onStatus({ status: "disconnected" }));
     expect(store.getState().collab).toMatchObject({ status: "disconnected", synced: false });
+  });
+
+  it("mirrors the provider's unsynced count and the browser's online state", () => {
+    const { store } = renderWith("wb-1");
+    act(() => providers.at(-1)?.config.onUnsyncedChanges({ number: 2 }));
+    expect(store.getState().collab.unsyncedChanges).toBe(2);
+    act(() => void window.dispatchEvent(new Event("offline")));
+    expect(store.getState().collab.online).toBe(false);
+    act(() => void window.dispatchEvent(new Event("online")));
+    expect(store.getState().collab.online).toBe(true);
   });
 
   it("stays read-only until the server grants read-write", () => {

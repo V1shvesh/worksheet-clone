@@ -23,13 +23,13 @@ test("connects and shows the live document", async ({ page }) => {
   await openWorkbook(page, "read-write");
 
   await expect(page.getByRole("heading", { name: "Q3 budget" })).toBeVisible();
-  await expect(connection(page)).toHaveText("Live");
+  await expect(connection(page)).toHaveText("All changes saved");
   await new SheetTabsPage(page).expectNames(["Sheet1"]);
 });
 
 test("a collaborator's rename appears live", async ({ page }) => {
   const collab = await openWorkbook(page, "read-write");
-  await expect(connection(page)).toHaveText("Live");
+  await expect(connection(page)).toHaveText("All changes saved");
 
   await collab.remoteEdit(workbookId, (doc) => {
     setSheetName(doc, readSheetOrder(doc)[0] ?? "", "Renamed by Bob");
@@ -40,7 +40,7 @@ test("a collaborator's rename appears live", async ({ page }) => {
 
 test("a local rename reaches the server", async ({ page }) => {
   const collab = await openWorkbook(page, "read-write");
-  await expect(connection(page)).toHaveText("Live");
+  await expect(connection(page)).toHaveText("All changes saved");
 
   const tabs = new SheetTabsPage(page);
   await tabs.rename("Sheet1", "Forecast");
@@ -56,7 +56,7 @@ test("a local rename reaches the server", async ({ page }) => {
 
 test("a viewer is view-only and can't change the document", async ({ page }) => {
   const collab = await openWorkbook(page, "readonly");
-  await expect(connection(page)).toHaveText("Live · View only");
+  await expect(connection(page)).toHaveText("All changes saved · View only");
 
   const tabs = new SheetTabsPage(page);
   await tabs.tab("Sheet1").dblclick();
@@ -76,15 +76,15 @@ test("a denied connection explains itself", async ({ page }) => {
 
 test("recovers after the connection drops", async ({ page }) => {
   const collab = await openWorkbook(page, "read-write");
-  await expect(connection(page)).toHaveText("Live");
+  await expect(connection(page)).toHaveText("All changes saved");
 
   collab.dropConnections();
-  await expect(connection(page)).toHaveText("Offline — reconnecting…");
+  await expect(connection(page)).toHaveText("Reconnecting…");
 
   // An edit made elsewhere while offline arrives once the provider reconnects.
   await collab.remoteEdit(workbookId, (doc) => {
     setSheetName(doc, readSheetOrder(doc)[0] ?? "", "Changed while offline");
   });
-  await expect(connection(page)).toHaveText("Live", { timeout: 10_000 });
+  await expect(connection(page)).toHaveText("All changes saved", { timeout: 10_000 });
   await new SheetTabsPage(page).expectNames(["Changed while offline"]);
 });

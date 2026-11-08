@@ -46,7 +46,7 @@ async function open(page: Page, access: CollabAccess = "read-write") {
 
   await page.goto("/");
   await page.getByRole("link", { name: BOOK }).click();
-  await expect(page.getByRole("status", { name: "Connection" })).toContainText("Live");
+  await expect(page.getByRole("status", { name: "Connection" })).toContainText("All changes saved");
 
   const tabs = new SheetTabsPage(page);
   const grid = new GridPage(page);

@@ -48,6 +48,11 @@ export function WorkbookDocProvider({
       getContext: () => captureUndoContext(ydoc, store.getState().grid),
     });
     dispatch(collabActions.opened(workbookId));
+    dispatch(collabActions.onlineChanged(navigator.onLine));
+    const onOnline = () => dispatch(collabActions.onlineChanged(true));
+    const onOffline = () => dispatch(collabActions.onlineChanged(false));
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
 
     const provider = new HocuspocusProvider({
       url: collabUrl(window.location),
@@ -55,6 +60,7 @@ export function WorkbookDocProvider({
       document: ydoc,
       onStatus: ({ status }) => dispatch(collabActions.statusChanged(status)),
       onSynced: ({ state }) => dispatch(collabActions.syncedChanged(state)),
+      onUnsyncedChanges: ({ number }) => dispatch(collabActions.unsyncedChangesChanged(number)),
       onAuthenticated: ({ scope }) =>
         dispatch(collabActions.accessChanged(scope === "read-write" ? "read-write" : "read-only")),
       onAuthenticationFailed: () => dispatch(collabActions.accessChanged("denied")),
@@ -68,6 +74,8 @@ export function WorkbookDocProvider({
     setOpen({ doc: ydoc, undo });
 
     return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
       provider.destroy();
       undo.destroy();
       ydoc.destroy();
