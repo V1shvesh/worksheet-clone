@@ -126,3 +126,18 @@ test("double click, context menu and keys are forwarded; default scroll/browser 
     ctrlLetterAlone: false,
   });
 });
+
+test("clicking a cell keeps DOM focus on the grid container, never on AG Grid's row", async ({
+  page,
+}) => {
+  await mountGrid(page);
+  await page.locator('#grid [data-row="2"][data-col="1"]').click();
+  const focused = await page.evaluate(() => ({
+    role: document.activeElement?.getAttribute("role") ?? null,
+    insideGrid: document.querySelector("#grid")?.contains(document.activeElement) ?? false,
+    isRow: document.activeElement?.classList.contains("ag-row") ?? false,
+  }));
+  expect(focused.insideGrid).toBe(true);
+  expect(focused.isRow).toBe(false);
+  expect(focused.role).not.toBe("row");
+});

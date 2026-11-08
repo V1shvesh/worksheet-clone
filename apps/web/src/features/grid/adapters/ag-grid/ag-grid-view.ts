@@ -553,6 +553,12 @@ export class AgGridView implements GridView {
       this.emit("pointerDown", target, toPointerInfo(e));
     });
 
+    // A click's default action focuses AG Grid's row element (role="row"), which then draws its
+    // own focus ring across the whole row. Keep DOM focus on our container instead.
+    listen(root, "focusin", (e) => {
+      if (e.target !== root) root.focus({ preventScroll: true });
+    });
+
     listen(root, "dblclick", (e) => {
       if ((e.target as Element).closest(".ag-header-cell-resize")) return;
       const target = this.hitTest(e.clientX, e.clientY);
