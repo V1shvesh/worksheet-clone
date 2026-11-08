@@ -57,18 +57,28 @@ function SheetNameField({ sheetId }: { sheetId: string }) {
   // remote renames show up live without clobbering what the user is typing.
   const [draft, setDraft] = useState<string | null>(null);
 
-  function commit(): void {
-    if (draft !== null && draft !== name) {
-      renameSheet(sheetId, draft);
-    }
+  const [error, setError] = useState<string | null>(null);
+
+  function finish(): void {
     setDraft(null);
+    setError(null);
+  }
+
+  function commit(keepOpenOnError: boolean): void {
+    if (draft === null) return;
+    const result = renameSheet(sheetId, draft);
+    if (!result.ok && keepOpenOnError) {
+      setError(result.error);
+      return;
+    }
+    finish();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key === "Enter") {
-      commit();
+      commit(true);
     } else if (event.key === "Escape") {
-      setDraft(null);
+      finish();
     }
   }
 
@@ -81,9 +91,10 @@ function SheetNameField({ sheetId }: { sheetId: string }) {
         maxLength={100}
         onFocus={() => !readOnly && setDraft(name)}
         onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
+        onBlur={() => commit(false)}
         onKeyDown={handleKeyDown}
       />
+      {error && <span role="alert">{error}</span>}
     </label>
   );
 }

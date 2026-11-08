@@ -61,7 +61,7 @@ describe("mutations", () => {
     const origins: unknown[] = [];
     doc.on("afterTransaction", (tx: Y.Transaction) => origins.push(tx.origin));
 
-    expect(renameSheet(doc, false, sheetId, "  Budget  ")).toBe(true);
+    expect(renameSheet(doc, false, sheetId, "  Budget  ")).toEqual({ ok: true });
     expect(getSheetName(doc, sheetId)).toBe("Budget");
     expect(origins).toEqual([LOCAL_ORIGIN]);
   });
@@ -70,8 +70,8 @@ describe("mutations", () => {
     const [doc, sheetId] = seededDoc();
     const before = Y.encodeStateVector(doc);
 
-    expect(renameSheet(doc, true, sheetId, "Nope")).toBe(false);
-    expect(renameSheet(doc, false, sheetId, "   ")).toBe(false);
+    expect(renameSheet(doc, true, sheetId, "Nope").ok).toBe(false);
+    expect(renameSheet(doc, false, sheetId, "   ").ok).toBe(false);
     expect(Y.encodeStateVector(doc)).toEqual(before);
   });
 });
@@ -90,7 +90,9 @@ describe("useDocValue", () => {
     const afterMount = renders;
 
     // Renaming leaves the order unchanged, so no re-render.
-    act(() => renameSheet(doc, false, sheetId, "Renamed"));
+    act(() => {
+      renameSheet(doc, false, sheetId, "Renamed");
+    });
     expect(renders).toBe(afterMount);
 
     // A remote peer adding a sheet does change it.
