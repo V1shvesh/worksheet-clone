@@ -55,6 +55,15 @@ function clampMove(from: CellCoord, dir: Direction, env: KeyboardEnv): CellCoord
 
 const collapsed = (c: CellCoord): IndexSelection => ({ anchor: c, focus: c });
 
+// Cmd/Ctrl combos are shortcuts (clipboard, undo… later). Alt alone or Ctrl+Alt
+// (Windows AltGr) can TYPE characters such as "€" or "@" on many layouts, so
+// those only count as shortcuts when they don't produce a character.
+function isShortcut(key: KeyInfo): boolean {
+  if (key.metaKey) return true;
+  if (key.ctrlKey && !key.altKey) return true;
+  return key.altKey && !isPrintable(key.key);
+}
+
 /** A single printable character; named keys ("Shift", "Enter", ...) are longer. */
 function isPrintable(key: string): boolean {
   return [...key].length === 1;
@@ -109,7 +118,7 @@ function reduceEditingKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv):
 export function reduceKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv): KeyboardResult {
   if (env.rowCount === 0 || env.colCount === 0) return { state, commands: [] };
   if (state.editing) return reduceEditingKey(state, key, env);
-  if (key.ctrlKey || key.metaKey || key.altKey) return { state, commands: [] };
+  if (isShortcut(key)) return { state, commands: [] };
 
   const sel = state.selection;
   const arrow = ARROWS[key.key];

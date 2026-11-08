@@ -22,7 +22,7 @@ function setup(opts: Parameters<typeof mountInteraction>[0] = {}) {
   };
   const key = (
     k: string,
-    mods: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean } = {},
+    mods: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {},
   ) => m.view.keyDown({ key: k, ...mods });
   const text = (row: number, col: number) => m.model.getCell(cell(row, col)).text;
   const transactions: unknown[] = [];
@@ -115,6 +115,29 @@ describe("keyboard navigation (not editing)", () => {
 });
 
 describe("editing", () => {
+  it("characters typed with Alt (macOS) or AltGr (Ctrl+Alt on Windows) start editing", () => {
+    const { key, select, grid } = setup();
+    select(0, 0);
+    key("€", { altKey: true });
+    expect(grid().editing?.draft).toBe("€");
+
+    const other = setup();
+    other.select(0, 0);
+    other.key("@", { ctrlKey: true, altKey: true });
+    expect(other.grid().editing?.draft).toBe("@");
+  });
+
+  it("Ctrl/Cmd shortcuts and Alt with named keys never start editing", () => {
+    const { key, select, grid, selection } = setup();
+    select(2, 2);
+    key("c", { ctrlKey: true });
+    key("c", { metaKey: true });
+    key("v", { metaKey: true, altKey: true });
+    key("ArrowDown", { altKey: true });
+    expect(grid().editing).toBeNull();
+    expect(selection()!.range).toEqual({ start: cell(2, 2), end: cell(2, 2) });
+  });
+
   it("typing a character starts editing with that character as the draft", () => {
     const { key, select, grid, doc, sheetId } = setup();
     edit(doc, sheetId, 1, 1, { v: "old" });
