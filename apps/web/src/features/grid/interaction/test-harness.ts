@@ -7,7 +7,7 @@ import { connectModelToView, SheetViewModel } from "../model";
 import { createGridInteraction } from "./controller";
 
 /** Real doc + engine + model + store with a mounted fake grid, for interaction tests. */
-export function mountInteraction(opts: { doc?: Y.Doc; sheetId?: string } = {}) {
+export function mountInteraction(opts: { doc?: Y.Doc; sheetId?: string; readOnly?: boolean } = {}) {
   const fresh = opts.doc && opts.sheetId ? { doc: opts.doc, sheetId: opts.sheetId } : newDoc();
   const { doc, sheetId } = fresh;
   const engine = createFormulaEngine(doc);
@@ -16,7 +16,8 @@ export function mountInteraction(opts: { doc?: Y.Doc; sheetId?: string } = {}) {
   view.mount(document.createElement("div"), model.dimensions(), (c) => model.getCell(c));
   const disconnect = connectModelToView(model, view);
   const store = createStore();
-  const interaction = createGridInteraction({ view, model, store, sheetId });
+  const target = { doc, readOnly: opts.readOnly ?? false };
+  const interaction = createGridInteraction({ view, model, store, target, sheetId });
   return {
     doc,
     sheetId,
@@ -24,6 +25,7 @@ export function mountInteraction(opts: { doc?: Y.Doc; sheetId?: string } = {}) {
     model,
     view,
     store,
+    target,
     interaction,
     dispose() {
       interaction.dispose();

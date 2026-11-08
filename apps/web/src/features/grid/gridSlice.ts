@@ -34,6 +34,15 @@ export const gridSlice = createSlice({
     selectionChanged(state, action: PayloadAction<IdSelection | null>) {
       state.selection = action.payload;
     },
+    editingStarted(state, action: PayloadAction<EditingState>) {
+      state.editing = action.payload;
+    },
+    draftChanged(state, action: PayloadAction<string>) {
+      if (state.editing) state.editing.draft = action.payload;
+    },
+    editingEnded(state) {
+      state.editing = null;
+    },
   },
   extraReducers: (builder) => {
     // A different workbook never inherits the previous one's selection.

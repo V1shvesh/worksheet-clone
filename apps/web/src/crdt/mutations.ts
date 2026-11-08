@@ -38,6 +38,18 @@ export function setCellContent(
   return transact(doc, readOnly, () => setCell(doc, sheetId, rowId, colId, data));
 }
 
+/** Deletes the content of every given cell (formats stay) in a single transaction. */
+export function clearCells(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  cells: readonly { rowId: string; colId: string }[],
+): boolean {
+  return transact(doc, readOnly, () => {
+    for (const { rowId, colId } of cells) setCell(doc, sheetId, rowId, colId, undefined);
+  });
+}
+
 export function useWorkbookMutations() {
   const { doc, readOnly } = useWorkbookDoc();
   return useMemo(
