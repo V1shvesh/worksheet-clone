@@ -11,7 +11,7 @@ interface WorkbookDocValue {
   readOnly: boolean;
 }
 
-const WorkbookDocContext = createContext<WorkbookDocValue | null>(null);
+export const WorkbookDocContext = createContext<WorkbookDocValue | null>(null);
 
 export function collabUrl(location: Pick<Location, "protocol" | "host">): string {
   return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/collab`;

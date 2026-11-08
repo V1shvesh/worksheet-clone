@@ -567,7 +567,12 @@ export class AgGridView implements GridView {
 
     listen(root, "keydown", (e) => {
       const command = e.metaKey || e.ctrlKey;
-      if (ALWAYS_PREVENT.has(e.key) || (!command && PREVENT_WITHOUT_COMMAND.has(e.key))) {
+      // A typed character starts our floating editor, which takes focus before the keypress
+      // lands; without this the character would be inserted into it a second time (AltGr arrives
+      // as Ctrl+Alt and still types).
+      const typed =
+        !e.metaKey && !(e.ctrlKey && !e.altKey) && !e.isComposing && [...e.key].length === 1;
+      if (ALWAYS_PREVENT.has(e.key) || typed || (!command && PREVENT_WITHOUT_COMMAND.has(e.key))) {
         e.preventDefault();
       }
       const info: KeyInfo = {

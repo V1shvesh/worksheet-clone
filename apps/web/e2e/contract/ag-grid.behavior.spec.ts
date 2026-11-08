@@ -106,6 +106,9 @@ test("double click, context menu and keys are forwarded; default scroll/browser 
       paste: press({ key: "v", ctrlKey: true }),
       reload: press({ key: "r", metaKey: true }),
       letter: press({ key: "a" }),
+      altChar: press({ key: "€", altKey: true }),
+      altGrChar: press({ key: "@", ctrlKey: true, altKey: true }),
+      ctrlLetterAlone: press({ key: "a", ctrlKey: true }),
     };
   });
   expect(prevented).toEqual({
@@ -115,6 +118,11 @@ test("double click, context menu and keys are forwarded; default scroll/browser 
     copy: false,
     paste: false,
     reload: false,
-    letter: false,
+    // Typed characters are swallowed: they start our floating editor, which takes focus before
+    // the keypress and would otherwise receive the character a second time.
+    letter: true,
+    altChar: true,
+    altGrChar: true,
+    ctrlLetterAlone: false,
   });
 });
