@@ -3,12 +3,14 @@ import {
   cellKey,
   colIndexToLabel,
   decodeFormula,
+  formatSheetPrefix,
   getCellsMap,
   getColOrderArray,
   getColWidthsMap,
   getFormatsMap,
   getRowHeightsMap,
   getRowOrderArray,
+  getSheetName,
   readColOrder,
   readRowOrder,
   type CellFormat,
@@ -169,8 +171,16 @@ export class SheetViewModel {
     if (!data) return "";
     if (data.f !== undefined) {
       return decodeFormula(data.f, {
-        rowIndex: (id) => this.rowIndexById.get(id),
-        colIndex: (id) => this.colIndexById.get(id),
+        sheetId: this.sheetId,
+        // Own sheet only for now; cross-sheet wiring is added with the M5 web work.
+        lookup: (id) =>
+          id === this.sheetId
+            ? {
+                rowIndex: (r) => this.rowIndexById.get(r),
+                colIndex: (c) => this.colIndexById.get(c),
+              }
+            : undefined,
+        sheetPrefix: (id) => formatSheetPrefix(getSheetName(this.doc, id) ?? id),
       });
     }
     if (typeof data.v === "boolean") return data.v ? "TRUE" : "FALSE";

@@ -2,6 +2,7 @@ import { HyperFormula, type CellValue, type ExportedChange } from "hyperformula"
 import type * as Y from "yjs";
 import {
   decodeFormula,
+  formatSheetPrefix,
   getCellsMap,
   getColOrderArray,
   getRowOrderArray,
@@ -34,11 +35,21 @@ export interface FormulaEngine {
 
 // HyperFormula parses raw strings ("007" becomes 7, "TRUE" a boolean, "=x" a
 // formula). A leading apostrophe makes it keep the rest as plain text.
-function toRawContent(data: CellData, lookup: SheetIndex): string | number | boolean | null {
+function toRawContent(
+  sheetId: string,
+  data: CellData,
+  lookup: SheetIndex,
+): string | number | boolean | null {
   if (data.f !== undefined) {
     return decodeFormula(data.f, {
-      rowIndex: (id) => lookup.rows.get(id),
-      colIndex: (id) => lookup.cols.get(id),
+      sheetId,
+      // Own sheet only for now; cross-sheet wiring is added with the M5 web work.
+      lookup: (id) =>
+        id === sheetId
+          ? { rowIndex: (r) => lookup.rows.get(r), colIndex: (c) => lookup.cols.get(c) }
+          : undefined,
+      // HyperFormula names its sheets by id, which may start with a digit: always quote.
+      sheetPrefix: (id) => formatSheetPrefix(id, { alwaysQuote: true }),
     });
   }
   if (typeof data.v === "string") return `'${data.v}`;
@@ -82,7 +93,7 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
       const row = index.rows.get(rowId ?? "");
       const col = index.cols.get(colId ?? "");
       if (row === undefined || col === undefined) continue; // orphan of a deleted row/column
-      const raw = toRawContent(data, index);
+      const raw = toRawContent(sheetId, data, index);
       if (raw === null) continue;
       (content[row] ??= [])[col] = raw;
     }
@@ -196,7 +207,7 @@ export function createFormulaEngine(doc: Y.Doc): FormulaEngine {
             const col = state.cols.get(colId ?? "");
             if (row === undefined || col === undefined) continue;
             const data = state.cellsMap.get(key);
-            const raw = data ? toRawContent(data, state) : null;
+            const raw = data ? toRawContent(sheetId, data, state) : null;
             hf.setCellContents({ sheet: state.hfId, row, col }, [[raw]]);
             let list = touched.get(sheetId);
             if (!list) touched.set(sheetId, (list = []));

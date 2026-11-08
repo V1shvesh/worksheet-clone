@@ -1,7 +1,9 @@
 import * as Y from "yjs";
 import {
   createEmptyWorkbook,
+  createSheetNameIndex,
   encodeFormula,
+  getSheetName,
   readColOrder,
   readRowOrder,
   readSheetOrder,
@@ -25,7 +27,19 @@ export function put(doc: Y.Doc, sheetId: string, row: number, col: number, input
   const cols = readColOrder(doc, sheetId);
   const data =
     input && "f" in input
-      ? { f: encodeFormula(input.f, { rowId: (i) => rows[i]!, colId: (j) => cols[j]! }) }
+      ? {
+          f: encodeFormula(input.f, {
+            sheetId,
+            sheetIdByName: createSheetNameIndex(
+              readSheetOrder(doc).map((id) => ({ id, name: getSheetName(doc, id) ?? "" })),
+            ),
+            resolver: (id) => {
+              const r = id === sheetId ? rows : readRowOrder(doc, id);
+              const c = id === sheetId ? cols : readColOrder(doc, id);
+              return { rowId: (i) => r[i]!, colId: (j) => c[j]! };
+            },
+          }),
+        }
       : input;
   setCell(doc, sheetId, rows[row]!, cols[col]!, data);
 }

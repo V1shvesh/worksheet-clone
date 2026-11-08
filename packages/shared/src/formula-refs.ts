@@ -5,6 +5,20 @@
 // Stored tokens: [[r:ROW,c:COL]] cell, [[c:COL]] whole column, [[r:ROW]] whole
 // row; a "$" before r/c marks that axis absolute; ranges join two tokens
 // with ":".
+//
+// Cross-sheet references carry the SHEET ID first: [[s:SID,r:ROW,c:COL]],
+// [[s:SID,c:COL]], [[s:SID,r:ROW]]. In a range only the first token carries
+// "s:"; the second endpoint inherits that sheet. A token without "s:" refers
+// to the formula's own sheet (so documents written before cross-sheet support
+// need no migration). A ref typed with an explicit prefix of the formula's own
+// sheet is stored WITH "s:". Because ids, not names, are stored, renaming a
+// sheet never breaks a formula; a deleted sheet decodes to #REF!.
+//
+// In A1 text a sheet prefix is `Name!` (unquoted identifier: letters, digits,
+// "_" and "."; not starting with a digit) or a quoted name like 'My Sheet'!
+// with a doubled quote as escape. Single quotes only ever delimit sheet names
+// in formulas, so a quoted run directly followed by "!" is a prefix, never a
+// string literal.
 
 export interface IdResolver {
   /** 0-based row index to row id. May create ids; the codec stays pure. */
@@ -18,9 +32,74 @@ export interface IdLookup {
   colIndex(id: string): number | undefined;
 }
 
+/** Everything the encoder needs to know about the workbook. */
+export interface EncodeContext {
+  /** The sheet the formula lives in; unprefixed refs resolve against it. */
+  sheetId: string;
+  /**
+   * Maps a typed sheet name to its id, or undefined when no such sheet exists.
+   * Must match case-insensitively (see {@link createSheetNameIndex}).
+   */
+  sheetIdByName(name: string): string | undefined;
+  /** Row/column id resolver for a sheet (may create ids; the codec stays pure). */
+  resolver(sheetId: string): IdResolver;
+}
+
+export interface DecodeContext {
+  /** The sheet the formula lives in; unprefixed tokens resolve against it. */
+  sheetId: string;
+  /** Row/column index lookup for a sheet; undefined when the sheet is deleted. */
+  lookup(sheetId: string): IdLookup | undefined;
+  /**
+   * How to print a sheet prefix including the trailing "!": `Sheet2!` or
+   * `'my sheet'!` for display (see {@link formatSheetPrefix}), `'SID'!` for
+   * HyperFormula, which names its sheets by id (always quoted).
+   */
+  sheetPrefix(sheetId: string): string;
+}
+
 const MAX_COL_INDEX = 16383; // XFD
 const MAX_ROW = 1048576;
 const REF_ERROR = "#REF!";
+
+const PLAIN_SHEET_NAME_RE = /^[A-Za-z_][A-Za-z0-9_.]*$/;
+const UNQUOTED_PREFIX_RE = /([A-Za-z_][A-Za-z0-9_.]*)!/y;
+
+/** True when an unquoted `name!` could be misread as a cell, column, R1C1 ref or boolean. */
+function looksLikeReference(name: string): boolean {
+  return (
+    /^[A-Za-z]{1,3}\d*$/.test(name) || // A1, AB (a column), A
+    /^[Rr]\d*[Cc]\d*$/.test(name) || // R1C1, R, C, RC
+    /^(true|false)$/i.test(name)
+  );
+}
+
+/**
+ * Quotes a sheet name for A1 text. Names are quoted unless they are plain
+ * identifiers that cannot be mistaken for a reference; `alwaysQuote` is for the
+ * formula engine, whose sheet names are ids that may start with a digit.
+ */
+export function quoteSheetName(name: string, alwaysQuote = false): string {
+  if (!alwaysQuote && PLAIN_SHEET_NAME_RE.test(name) && !looksLikeReference(name)) return name;
+  return `'${name.replaceAll("'", "''")}'`;
+}
+
+/** `quoteSheetName(name)` plus the trailing "!". */
+export function formatSheetPrefix(name: string, options: { alwaysQuote?: boolean } = {}): string {
+  return `${quoteSheetName(name, options.alwaysQuote ?? false)}!`;
+}
+
+/** Case-insensitive name to id lookup for {@link EncodeContext.sheetIdByName}; first sheet wins on duplicates. */
+export function createSheetNameIndex(
+  sheets: Iterable<{ id: string; name: string }>,
+): (name: string) => string | undefined {
+  const byName = new Map<string, string>();
+  for (const { id, name } of sheets) {
+    const key = name.toLowerCase();
+    if (!byName.has(key)) byName.set(key, id);
+  }
+  return (name) => byName.get(name.toLowerCase());
+}
 
 export function colIndexToLabel(index: number): string {
   let label = "";
@@ -146,26 +225,65 @@ function literalEnd(src: string, pos: number): number {
   return src.length;
 }
 
-export function encodeFormula(a1Formula: string, resolve: IdResolver): string {
+/** Reads a sheet prefix (`Name!` or a quoted name followed by "!") at `pos`. */
+function readSheetPrefix(src: string, pos: number): { name: string; length: number } | undefined {
+  if (src[pos] === "'") {
+    const end = literalEnd(src, pos);
+    if (src[end - 1] !== "'" || end - pos < 2 || src[end] !== "!") return undefined;
+    return { name: src.slice(pos + 1, end - 1).replaceAll("''", "'"), length: end + 1 - pos };
+  }
+  UNQUOTED_PREFIX_RE.lastIndex = pos;
+  const m = UNQUOTED_PREFIX_RE.exec(src);
+  return m ? { name: m[1] ?? "", length: m[0].length } : undefined;
+}
+
+/** Marks the first token of an encoded ref/range as belonging to `sheetId`. */
+function qualify(text: string, sheetId: string): string {
+  return `[[s:${sheetId},${text.slice(2)}`;
+}
+
+/**
+ * A1 formula text to stored (id-based) form. References to unknown sheets and
+ * text the codec cannot read as a reference are kept verbatim.
+ */
+export function encodeFormula(a1Formula: string, ctx: EncodeContext): string {
   let out = "";
   let i = 0;
   while (i < a1Formula.length) {
     const ch = a1Formula[i] ?? "";
+    const prev = i > 0 ? (a1Formula[i - 1] ?? "") : "";
+    if (ch === "'" || (/[A-Za-z_]/.test(ch) && !IDENT_CHAR.test(prev))) {
+      const prefix = readSheetPrefix(a1Formula, i);
+      if (prefix) {
+        const refStart = i + prefix.length;
+        const sheetId = ctx.sheetIdByName(prefix.name);
+        const m = matchRef(a1Formula, refStart, ctx.resolver(sheetId ?? ctx.sheetId));
+        const next = m ? (a1Formula[refStart + m.length] ?? "") : "";
+        if (m && !/[A-Za-z0-9_(]/.test(next)) {
+          out +=
+            sheetId === undefined
+              ? a1Formula.slice(i, refStart + m.length)
+              : qualify(m.text, sheetId);
+          i = refStart + m.length;
+        } else {
+          // Not a reference after all: leave the prefix text alone.
+          out += a1Formula.slice(i, refStart);
+          i = refStart;
+        }
+        continue;
+      }
+    }
     if (ch === '"' || ch === "'") {
       const end = literalEnd(a1Formula, i);
       out += a1Formula.slice(i, end);
       i = end;
       continue;
     }
-    const prev = i > 0 ? (a1Formula[i - 1] ?? "") : "";
-    const startsRef = /[A-Za-z0-9$]/.test(ch) && !IDENT_CHAR.test(prev);
-    // After "!" a reference belongs to another sheet (M5); copy it verbatim.
-    const sheetQualified = prev === "!" && /[A-Za-z0-9$]/.test(ch);
-    if (startsRef || sheetQualified) {
-      const m = matchRef(a1Formula, i, resolve);
+    if (/[A-Za-z0-9$]/.test(ch) && !IDENT_CHAR.test(prev)) {
+      const m = matchRef(a1Formula, i, ctx.resolver(ctx.sheetId));
       const next = m ? (a1Formula[i + m.length] ?? "") : "";
       if (m && !/[A-Za-z0-9_(]/.test(next)) {
-        out += sheetQualified ? a1Formula.slice(i, i + m.length) : m.text;
+        out += m.text;
         i += m.length;
         continue;
       }
@@ -178,29 +296,32 @@ export function encodeFormula(a1Formula: string, resolve: IdResolver): string {
 
 const ID = "[A-Za-z0-9_-]+";
 const TOKEN_RE = new RegExp(
-  `\\[\\[(?:(\\$?)r:(${ID})(?:,(\\$?)c:(${ID}))?|(\\$?)c:(${ID}))\\]\\]`,
+  `\\[\\[(?:s:(${ID}),)?(?:(\\$?)r:(${ID})(?:,(\\$?)c:(${ID}))?|(\\$?)c:(${ID}))\\]\\]`,
   "y",
 );
+
+interface ParsedIds {
+  sheet?: string;
+  row?: { abs: boolean; id: string };
+  col?: { abs: boolean; id: string };
+}
 
 function readToken(src: string, pos: number): { ref: ParsedIds; length: number } | undefined {
   TOKEN_RE.lastIndex = pos;
   const m = TOKEN_RE.exec(src);
   if (!m) return undefined;
-  if (m[2] !== undefined) {
+  const sheet = m[1] !== undefined ? { sheet: m[1] } : {};
+  if (m[3] !== undefined) {
     return {
       length: m[0].length,
       ref: {
-        row: { abs: m[1] === "$", id: m[2] },
-        ...(m[4] !== undefined ? { col: { abs: m[3] === "$", id: m[4] } } : {}),
+        ...sheet,
+        row: { abs: m[2] === "$", id: m[3] },
+        ...(m[5] !== undefined ? { col: { abs: m[4] === "$", id: m[5] } } : {}),
       },
     };
   }
-  return { length: m[0].length, ref: { col: { abs: m[5] === "$", id: m[6] ?? "" } } };
-}
-
-interface ParsedIds {
-  row?: { abs: boolean; id: string };
-  col?: { abs: boolean; id: string };
+  return { length: m[0].length, ref: { ...sheet, col: { abs: m[6] === "$", id: m[7] ?? "" } } };
 }
 
 function toA1(ref: ParsedIds, lookup: IdLookup, inRange: boolean): string | undefined {
@@ -222,7 +343,11 @@ function toA1(ref: ParsedIds, lookup: IdLookup, inRange: boolean): string | unde
   return inRange ? only : `${only}:${only}`;
 }
 
-export function decodeFormula(stored: string, lookup: IdLookup): string {
+/**
+ * Stored (id-based) formula to A1 text. Refs to a deleted sheet, row or column
+ * (and ranges with any such endpoint) become `#REF!`.
+ */
+export function decodeFormula(stored: string, ctx: DecodeContext): string {
   let out = "";
   let i = 0;
   while (i < stored.length) {
@@ -242,12 +367,19 @@ export function decodeFormula(stored: string, lookup: IdLookup): string {
           second = readToken(stored, end + 1);
           if (second) end += 1 + second.length;
         }
-        if (second) {
+        const sheetId = first.ref.sheet ?? ctx.sheetId;
+        const lookup = ctx.lookup(sheetId);
+        const prefix = first.ref.sheet !== undefined ? ctx.sheetPrefix(sheetId) : "";
+        const otherSheet = second?.ref.sheet !== undefined && second.ref.sheet !== sheetId;
+        if (lookup === undefined || otherSheet) {
+          out += REF_ERROR;
+        } else if (second) {
           const a = toA1(first.ref, lookup, true);
           const b = toA1(second.ref, lookup, true);
-          out += a === undefined || b === undefined ? REF_ERROR : `${a}:${b}`;
+          out += a === undefined || b === undefined ? REF_ERROR : `${prefix}${a}:${b}`;
         } else {
-          out += toA1(first.ref, lookup, false) ?? REF_ERROR;
+          const a = toA1(first.ref, lookup, false);
+          out += a === undefined ? REF_ERROR : prefix + a;
         }
         i = end;
         continue;
@@ -257,4 +389,27 @@ export function decodeFormula(stored: string, lookup: IdLookup): string {
     i++;
   }
   return out;
+}
+
+/** Ids of the sheets a stored formula mentions via `s:` tokens (string literals skipped). */
+export function referencedSheetIds(stored: string): Set<string> {
+  const ids = new Set<string>();
+  let i = 0;
+  while (i < stored.length) {
+    const ch = stored[i];
+    if (ch === '"' || ch === "'") {
+      i = literalEnd(stored, i);
+      continue;
+    }
+    if (ch === "[" && stored[i + 1] === "[") {
+      const token = readToken(stored, i);
+      if (token) {
+        if (token.ref.sheet !== undefined) ids.add(token.ref.sheet);
+        i += token.length;
+        continue;
+      }
+    }
+    i++;
+  }
+  return ids;
 }

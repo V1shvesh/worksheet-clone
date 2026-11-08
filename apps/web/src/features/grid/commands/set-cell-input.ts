@@ -1,5 +1,13 @@
 import type * as Y from "yjs";
-import { encodeFormula, readColOrder, readRowOrder, type CellData } from "@worksheet-clone/shared";
+import {
+  createSheetNameIndex,
+  encodeFormula,
+  getSheetName,
+  readColOrder,
+  readRowOrder,
+  readSheetOrder,
+  type CellData,
+} from "@worksheet-clone/shared";
 import { setCellContent } from "../../../crdt/mutations";
 import type { CellCoord } from "../port";
 import { parseCellInput } from "./parse-cell-input";
@@ -27,8 +35,15 @@ export function setCellInput(
   if (parsed.kind === "formula") {
     data = {
       f: encodeFormula(parsed.a1, {
-        rowId: (i) => rows[i] ?? MISSING_ID,
-        colId: (j) => cols[j] ?? MISSING_ID,
+        sheetId,
+        sheetIdByName: createSheetNameIndex(
+          readSheetOrder(doc).map((id) => ({ id, name: getSheetName(doc, id) ?? "" })),
+        ),
+        resolver: (id) => {
+          const r = id === sheetId ? rows : readRowOrder(doc, id);
+          const c = id === sheetId ? cols : readColOrder(doc, id);
+          return { rowId: (i) => r[i] ?? MISSING_ID, colId: (j) => c[j] ?? MISSING_ID };
+        },
       }),
     };
   } else if (parsed.kind === "value") {
