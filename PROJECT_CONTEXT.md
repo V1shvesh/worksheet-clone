@@ -135,7 +135,7 @@ doc.getMap('sheets')        → sheetId → Y.Map {
 2. Yjs applies locally (optimistic); the observer updates HyperFormula → dependent cells re-render.
 3. The provider sends one update message per transaction → the action is atomic on the wire.
 4. Hocuspocus applies it, broadcasts to other clients, debounces persistence to Postgres.
-5. `Y.UndoManager` (trackedOrigins = LOCAL_ORIGIN, captureTimeout ≈ 500 ms) groups the same transaction for undo/redo.
+5. `Y.UndoManager` (trackedOrigins = LOCAL_ORIGIN, `captureTimeout: 0`) makes each transaction — each user action — exactly one undo step, as in Excel/Sheets (decided 2026-11-08). Grouping by time would merge separate quick actions (type in A1, Enter, type in A2) into one step; time-based batching belongs only to persistence (the server's 2 s store debounce), not to undo.
 
 ### 3.3 Rollback & error handling strategy
 

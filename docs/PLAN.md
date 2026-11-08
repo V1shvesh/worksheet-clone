@@ -76,9 +76,9 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 
 - Toolbar: background color, bold, italic, underline — applied to the current selection in one transaction
 - Formula bar: shows raw input (A1 formulas) of the active cell, edits commit through the same path as the cell editor
-- `Y.UndoManager` scoped to LOCAL_ORIGIN, captureTimeout grouping, Ctrl/Cmd+Z / Shift+Z, toolbar buttons; selection restored on undo via stack-item metadata
+- `Y.UndoManager` scoped to LOCAL_ORIGIN, one undo step per action (`captureTimeout: 0`), Ctrl/Cmd+Z / Shift+Z, toolbar buttons; selection restored on undo via stack-item metadata
 - Multi-cell actions (paste range, clear range) = one transaction = one undo step
-- Clipboard: copy/cut/paste ranges as TSV (interop with Excel/Sheets); formula references shifted via HyperFormula's copy/paste semantics
+- Clipboard: copy/cut/paste ranges as TSV (interop with Excel/Sheets) plus an HTML payload carrying raw inputs and formats for pastes within the app; formula references shifted by our own `shiftFormula` in the shared codec (HyperFormula's copy/paste only works inside its own clipboard, so it can't handle external text or cut)
 - Fill handle in `overlay/` + `interaction/`: drag to extend, linear series detection, formulas shifted relatively; one Command per fill
   **Done when:** a collaborator's edits are never undone by your undo, and fill-down of `=A1*2` over 10 rows produces correct relative refs (both tested in e2e).
 
@@ -114,6 +114,8 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 - Second grid adapter (e.g. Glide Data Grid) if AG Grid Community limits us
 - Email invites, link sharing, comments
 - Server-side HyperFormula for exports (CSV/XLSX)
+- Cut/paste rewriting references: after a cut-paste, other formulas that pointed at the moved cells still point at the (now empty) source cells; Excel redirects them
+- Fill handle double-click (auto-fill down to the end of the adjacent data)
 - Unique sheet names under concurrency: two users adding or renaming sheets at the same instant can end up with two sheets of the same name (each client only checks its own copy). Existing formulas are unaffected because they store sheet ids; a newly typed `Name!A1` resolves to the first matching sheet in tab order, the same on every client. A fix would be a server-side rename of the later duplicate (e.g. "Sheet2 (2)").
 
 ---
