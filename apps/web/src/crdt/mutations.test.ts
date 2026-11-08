@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
   cellKey,
+  getColWidthsMap,
   getFormatsMap,
+  getRowHeightsMap,
   getSheetName,
   readColOrder,
   readRowOrder,
@@ -17,7 +19,9 @@ import {
   deleteSheet,
   moveSheet,
   renameSheet,
+  setColWidth,
   setFormat,
+  setRowHeight,
   setSheetHidden,
 } from "./mutations";
 
@@ -231,5 +235,49 @@ describe("setFormat", () => {
     expect(setFormat(doc, true, sheetId, cellsOf(doc, sheetId, 1), { b: true })).toBe(false);
     expect(setFormat(doc, false, sheetId, [], { b: true })).toBe(false);
     expect(w.updates).toBe(0);
+  });
+});
+
+describe("setColWidth / setRowHeight", () => {
+  it("write one LOCAL_ORIGIN transaction each, rounded to whole pixels", () => {
+    const { doc, sheetId } = newDoc();
+    const col = readColOrder(doc, sheetId)[2]!;
+    const row = readRowOrder(doc, sheetId)[3]!;
+    const w = watch(doc);
+    expect(setColWidth(doc, false, sheetId, col, 140.4)).toBe(true);
+    expect(setRowHeight(doc, false, sheetId, row, 60.6)).toBe(true);
+    expect(getColWidthsMap(doc, sheetId).get(col)).toBe(140);
+    expect(getRowHeightsMap(doc, sheetId).get(row)).toBe(61);
+    expect(w.updates).toBe(2);
+    expect(w.origins).toEqual([LOCAL_ORIGIN, LOCAL_ORIGIN]);
+  });
+
+  it("clamps to the allowed range", () => {
+    const { doc, sheetId } = newDoc();
+    const col = readColOrder(doc, sheetId)[0]!;
+    const row = readRowOrder(doc, sheetId)[0]!;
+    setColWidth(doc, false, sheetId, col, 3);
+    expect(getColWidthsMap(doc, sheetId).get(col)).toBe(20);
+    setColWidth(doc, false, sheetId, col, 99999);
+    expect(getColWidthsMap(doc, sheetId).get(col)).toBe(1000);
+    setRowHeight(doc, false, sheetId, row, 1);
+    expect(getRowHeightsMap(doc, sheetId).get(row)).toBe(16);
+    setRowHeight(doc, false, sheetId, row, 99999);
+    expect(getRowHeightsMap(doc, sheetId).get(row)).toBe(500);
+  });
+
+  it("refuse while read-only, for non-numbers, an unknown sheet and an unchanged size", () => {
+    const { doc, sheetId } = newDoc();
+    const col = readColOrder(doc, sheetId)[0]!;
+    const row = readRowOrder(doc, sheetId)[0]!;
+    const w = watch(doc);
+    expect(setColWidth(doc, true, sheetId, col, 150)).toBe(false);
+    expect(setRowHeight(doc, true, sheetId, row, 50)).toBe(false);
+    expect(setColWidth(doc, false, sheetId, col, Number.NaN)).toBe(false);
+    expect(setColWidth(doc, false, "nope", col, 150)).toBe(false);
+    expect(w.updates).toBe(0);
+    expect(setColWidth(doc, false, sheetId, col, 150)).toBe(true);
+    expect(setColWidth(doc, false, sheetId, col, 150)).toBe(false);
+    expect(w.updates).toBe(1);
   });
 });

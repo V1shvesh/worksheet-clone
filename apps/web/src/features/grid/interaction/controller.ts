@@ -1,6 +1,7 @@
 import type * as Y from "yjs";
 import { readColOrder, readRowOrder } from "@worksheet-clone/shared";
 import type { AppDispatch, RootState } from "../../../app/store";
+import { setColWidth, setRowHeight } from "../../../crdt/mutations";
 import { LOCAL_ORIGIN } from "../../../crdt/origin";
 import { toastsActions } from "../../toasts/toastsSlice";
 import { fillRange } from "../commands/fill-range";
@@ -17,6 +18,7 @@ import {
   type CellCoord,
   type CellRange,
   type CellRenderData,
+  type GridDimensions,
   type GridView,
 } from "../port";
 import {
@@ -65,6 +67,8 @@ export interface GridStore {
 
 /** What the controller reads from the view model (SheetViewModel satisfies this). */
 export interface InteractionModel extends IdMapper {
+  /** Full geometry; the controller re-sends it when a resize is refused. */
+  dimensions(): GridDimensions;
   getRawInput(cell: CellCoord): string;
   getCell(cell: CellCoord): CellRenderData;
 }
@@ -114,6 +118,11 @@ export interface GridInteraction {
   copy(data: ClipboardDataLike, cut: boolean): boolean;
   /** Native paste; same return contract as `copy`. Refused (but handled) while read-only. */
   paste(data: ClipboardDataLike): boolean;
+  /**
+   * Row-height drag from the overlay's resize handle, called directly (AG Grid has no row
+   * resize, so the port's `rowResized` is not involved). One transaction; false when refused.
+   */
+  resizeRow(row: number, height: number): boolean;
   /** Keep the Redux draft in sync with the overlay editor's text. */
   updateDraft(text: string): void;
   dispose(): void;
@@ -395,6 +404,14 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       const selection = contextMenuSelection(t, pointerContext());
       if (selection) select(selection);
     }),
+    // Emitted once, on release of a column-resize drag. A refused or unchanged write (viewer,
+    // clamped to the stored value) must not leave the grid at the width the user dragged to.
+    view.on("columnResized", (col, width) => {
+      const colId = model.colIdAt(col);
+      if (colId && setColWidth(target.doc, target.readOnly, sheetId, colId, width)) return;
+      view.setDimensions(model.dimensions());
+      view.refreshCells("all");
+    }),
     view.on("doubleClick", (t) => {
       if (isHeaderHit(t) || target.readOnly) return;
       const cell = cellIdAt(t, model);
@@ -438,6 +455,12 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
         }),
       );
       return true;
+    },
+    resizeRow(row, height) {
+      const rowId = model.rowIdAt(row);
+      return (
+        rowId !== undefined && setRowHeight(target.doc, target.readOnly, sheetId, rowId, height)
+      );
     },
     updateDraft(text) {
       if (store.getState().grid.editing) store.dispatch(gridActions.draftChanged(text));

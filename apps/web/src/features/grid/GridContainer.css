@@ -61,3 +61,17 @@
   box-sizing: border-box;
   border: 1px dashed #1a73e8;
 }
+/* A 5px strip on a row header's bottom edge; the guide shows the new edge while dragging. */
+.grid-row-resize-handle {
+  position: absolute;
+  cursor: row-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.grid-row-resize-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed #1a73e8;
+}

@@ -152,6 +152,16 @@ export class FakeGridView implements GridView {
     return visible ? { x, y, width, height } : null;
   }
 
+  getRowHeaderRect(row: number): Rect | null {
+    this.assertMounted("getRowHeaderRect");
+    const dims = this.dims!;
+    if (row < 0 || row >= dims.rowCount) return null;
+    const y = this.headerHeight + this.rowTops[row]! - this.scrollY;
+    const height = dims.rowHeight(row);
+    const visible = y < this.viewportHeight && y + height > this.headerHeight;
+    return visible ? { x: 0, y, width: this.rowHeaderWidth, height } : null;
+  }
+
   hitTest(clientX: number, clientY: number): CellCoord | HeaderHit | null {
     this.assertMounted("hitTest");
     const dims = this.dims!;

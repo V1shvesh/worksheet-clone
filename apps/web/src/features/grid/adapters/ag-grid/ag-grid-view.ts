@@ -317,6 +317,19 @@ export class AgGridView implements GridView {
     return visible ? { x, y, width: r.width, height } : null;
   }
 
+  getRowHeaderRect(row: number): Rect | null {
+    this.assertMounted("getRowHeaderRect");
+    const el = this.root!.querySelector<HTMLElement>(`[data-row-header="${row}"]`);
+    if (!el) return null;
+    const origin = this.root!.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const height = el.closest(".ag-row")?.getBoundingClientRect().height ?? r.height;
+    const area = this.dataArea();
+    const y = r.top - origin.top;
+    if (!(y < area.bottom && y + height > area.top)) return null;
+    return { x: r.left - origin.left, y, width: r.width, height };
+  }
+
   hitTest(clientX: number, clientY: number): CellCoord | HeaderHit | null {
     this.assertMounted("hitTest");
     const bounds = this.root!.getBoundingClientRect();

@@ -94,6 +94,8 @@ export interface GridView {
 
   // geometry (powers overlays, fill handle, floating editor)
   getCellRect(c: CellCoord): Rect | null; // null = not rendered
+  /** The row-number header cell of `row` (same y/height as its cells), or null when not visible. */
+  getRowHeaderRect(row: number): Rect | null;
   hitTest(clientX: number, clientY: number): CellCoord | HeaderHit | null;
   getVisibleRange(): CellRange;
   scrollIntoView(c: CellCoord): void;

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useState,
   useLayoutEffect,
   useReducer,
   useRef,
@@ -11,7 +12,8 @@ import type { RootState } from "../../../app/store";
 import type { GridInteraction, IdMapper } from "../interaction";
 import { resolveSelection, type Direction, type IdSelection } from "../interaction";
 import type { SheetViewModel } from "../model";
-import { rangeContains, type GridView, type Rect } from "../port";
+import { MAX_ROW_HEIGHT, MIN_ROW_HEIGHT } from "../../../crdt/mutations";
+import { isHeaderHit, rangeContains, type GridView, type Rect } from "../port";
 import { visibleRangeRect } from "./geometry";
 
 export interface GridOverlayProps {
@@ -49,6 +51,27 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
     };
   }, [view, model]);
 
+  // Row resize: only the hovered row header shows its handle. The handle itself is outside the
+  // grid (the layer is above it), so a pointer over the handle must not clear the hover.
+  const [hoverRow, setHoverRow] = useState<number | null>(null);
+  const resizing = useRef(false);
+  useEffect(() => {
+    if (readOnly) {
+      setHoverRow(null);
+      return;
+    }
+    const onMove = (e: globalThis.PointerEvent) => {
+      if (resizing.current) return;
+      if (e.target instanceof Element && e.target.closest("[data-testid='row-resize-handle']")) {
+        return;
+      }
+      const hit = view.hitTest(e.clientX, e.clientY);
+      setHoverRow(hit && isHeaderHit(hit) && hit.kind === "rowHeader" ? hit.row : null);
+    };
+    document.addEventListener("pointermove", onMove);
+    return () => document.removeEventListener("pointermove", onMove);
+  }, [view, readOnly]);
+
   // Access can be revoked mid-edit; a viewer must not be left holding an editor.
   useEffect(() => {
     if (readOnly && editing) controller.cancelEdit();
@@ -72,6 +95,8 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
     cutMark && cutMark.sheetId === model.sheetId ? cutMark.range : null;
   const markResolved = resolveSelection(markSelection, mapper);
   const cutRect = markResolved && visibleRangeRect(view, markResolved.range);
+
+  const resizeRect = !readOnly && hoverRow !== null ? view.getRowHeaderRect(hoverRow) : null;
 
   const editRow = editing ? model.rowIndexOf(editing.rowId) : undefined;
   const editCol = editing ? model.colIndexOf(editing.colId) : undefined;
@@ -97,6 +122,15 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
       {activeRect && (
         <div className="grid-active-cell" data-testid="active-cell" style={px(activeRect)} />
       )}
+      {resizeRect && hoverRow !== null && (
+        <RowResizeHandle
+          key={hoverRow}
+          row={hoverRow}
+          rect={resizeRect}
+          controller={controller}
+          resizing={resizing}
+        />
+      )}
       {editing && !readOnly && (
         <CellEditor
           key={`${editing.rowId}:${editing.colId}`}
@@ -109,6 +143,72 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
         />
       )}
     </div>
+  );
+}
+
+const RESIZE_STRIP = 5;
+
+interface RowResizeHandleProps {
+  row: number;
+  /** The row header's rect (from `getRowHeaderRect`). */
+  rect: Rect;
+  controller: GridInteraction;
+  resizing: { current: boolean };
+}
+
+/**
+ * A 5px strip on the bottom edge of a row header. Dragging shows a guide line at the new
+ * bottom edge; releasing writes the height through the controller (no port event: the grid
+ * library has no row-resize gesture).
+ */
+function RowResizeHandle({ row, rect, controller, resizing }: RowResizeHandleProps) {
+  const [drag, setDrag] = useState<{ startY: number; height: number } | null>(null);
+  const heightFor = (clientY: number, startY: number) =>
+    Math.min(MAX_ROW_HEIGHT, Math.max(MIN_ROW_HEIGHT, Math.round(rect.height + clientY - startY)));
+
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizing.current = true;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setDrag({ startY: e.clientY, height: rect.height });
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (drag) setDrag({ startY: drag.startY, height: heightFor(e.clientY, drag.startY) });
+  };
+  const finish = (e: PointerEvent<HTMLDivElement>, commit: boolean) => {
+    if (!drag) return;
+    resizing.current = false;
+    setDrag(null);
+    if (commit) controller.resizeRow(row, heightFor(e.clientY, drag.startY));
+  };
+
+  const bottom = rect.y + (drag ? drag.height : rect.height);
+  return (
+    <>
+      <div
+        className="grid-row-resize-handle"
+        data-testid="row-resize-handle"
+        style={{
+          left: rect.x,
+          width: rect.width,
+          top: bottom - Math.floor(RESIZE_STRIP / 2) - 1,
+          height: RESIZE_STRIP,
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => finish(e, true)}
+        onPointerCancel={(e) => finish(e, false)}
+      />
+      {drag && (
+        <div
+          className="grid-row-resize-guide"
+          data-testid="row-resize-guide"
+          style={{ top: bottom }}
+        />
+      )}
+    </>
   );
 }
 

@@ -114,6 +114,13 @@ function rectOf(g: ContractGrid, c: CellCoord) {
   return r;
 }
 
+function clientCentre2(
+  g: ContractGrid,
+  r: { x: number; y: number; width: number; height: number },
+) {
+  return g.viewportToClient(r.x + r.width / 2, r.y + r.height / 2);
+}
+
 function clientCentre(g: ContractGrid, c: CellCoord) {
   const r = rectOf(g, c);
   return g.viewportToClient(r.x + r.width / 2, r.y + r.height / 2);
@@ -184,6 +191,41 @@ export const gridViewContract: ContractCase[] = [
             );
           }
         }
+      }),
+  },
+  {
+    name: "getRowHeaderRect lines up with the row's cells and is null off-screen",
+    run: (ctx) =>
+      withGrid(ctx, {}, async (g) => {
+        for (const row of [0, 1, 4]) {
+          const header = g.view.getRowHeaderRect(row);
+          check(header !== null, `expected a header rect for visible row ${row}`);
+          const cell = rectOf(g, { row, col: 0 });
+          check(
+            header.y === cell.y && header.height === cell.height,
+            `row ${row} header ${JSON.stringify(header)} must share y/height with cell ${JSON.stringify(cell)}`,
+          );
+          check(
+            header.x < cell.x && header.width > 0 && header.x + header.width <= cell.x + 1,
+            `row ${row} header must sit left of the cells: ${JSON.stringify(header)}`,
+          );
+          const p = clientCentre2(g, header);
+          const hit = g.view.hitTest(p.clientX, p.clientY);
+          check(
+            targetsEqual(hit, { kind: "rowHeader", row }),
+            `hitTest at the centre of the row ${row} header returned ${show(hit)}`,
+          );
+        }
+        check(g.view.getRowHeaderRect(199) === null, "far row must have a null header rect");
+        await g.scrollTo(0, 400);
+        const range = g.view.getVisibleRange();
+        check(g.view.getRowHeaderRect(0) === null, "row 0 header is scrolled away");
+        const shown = g.view.getRowHeaderRect(range.start.row);
+        check(shown !== null, "first visible row must have a header rect");
+        check(
+          shown.y === rectOf(g, range.start).y,
+          "header rect must follow the cells when scrolled",
+        );
       }),
   },
   {
@@ -336,6 +378,7 @@ export const gridViewContract: ContractCase[] = [
         view.destroy();
         const calls: [string, () => unknown][] = [
           ["getCellRect", () => view.getCellRect({ row: 0, col: 0 })],
+          ["getRowHeaderRect", () => view.getRowHeaderRect(0)],
           ["hitTest", () => view.hitTest(10, 10)],
           ["getVisibleRange", () => view.getVisibleRange()],
           ["refreshCells", () => view.refreshCells("all")],

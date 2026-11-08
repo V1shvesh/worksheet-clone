@@ -4,7 +4,9 @@ import {
   addSheet as addSheetToDoc,
   cellKey,
   deleteSheet as deleteSheetFromDoc,
+  getColWidthsMap,
   getFormatsMap,
+  getRowHeightsMap,
   getSheetName,
   hasOtherVisibleSheet,
   isSheetHidden,
@@ -202,6 +204,50 @@ export function applyCellChanges(
       }
     }
   });
+}
+
+export const MIN_COL_WIDTH = 20;
+export const MAX_COL_WIDTH = 1000;
+export const MIN_ROW_HEIGHT = 16;
+export const MAX_ROW_HEIGHT = 500;
+
+function clampSize(value: number, min: number, max: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * Stores a column width (clamped to 20-1000 px, whole pixels) in one transaction. Returns
+ * false, writing nothing, when read-only, the sheet is gone, the value is not a number, or
+ * the stored width is already that value.
+ */
+export function setColWidth(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  colId: string,
+  width: number,
+): boolean {
+  const next = clampSize(width, MIN_COL_WIDTH, MAX_COL_WIDTH);
+  if (next === null || getSheetName(doc, sheetId) === undefined) return false;
+  const widths = getColWidthsMap(doc, sheetId);
+  if (widths.get(colId) === next) return false;
+  return transact(doc, readOnly, () => widths.set(colId, next));
+}
+
+/** Like `setColWidth`, for a row height (clamped to 16-500 px). */
+export function setRowHeight(
+  doc: Y.Doc,
+  readOnly: boolean,
+  sheetId: string,
+  rowId: string,
+  height: number,
+): boolean {
+  const next = clampSize(height, MIN_ROW_HEIGHT, MAX_ROW_HEIGHT);
+  if (next === null || getSheetName(doc, sheetId) === undefined) return false;
+  const heights = getRowHeightsMap(doc, sheetId);
+  if (heights.get(rowId) === next) return false;
+  return transact(doc, readOnly, () => heights.set(rowId, next));
 }
 
 export function useWorkbookMutations() {

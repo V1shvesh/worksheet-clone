@@ -77,12 +77,22 @@ test("the row-header column cannot be moved and resizing emits columnResized, ne
     .boundingBox())!;
   await page.mouse.move(handle.x + handle.width / 2, handle.y + 10);
   await page.mouse.down();
+  await page.mouse.move(handle.x + 20, handle.y + 10, { steps: 5 });
   await page.mouse.move(handle.x + 40, handle.y + 10, { steps: 5 });
+  // Nothing is emitted while the drag is in progress (not once per pixel)...
+  expect(await recorded(page)).toEqual([]);
   await page.mouse.up();
-  await expect.poll(async () => (await recorded(page)).map((e) => e[0])).toEqual(["columnResized"]);
-  const [, col, width] = (await recorded(page))[0]!;
+  // ...and exactly one event on release.
+  await expect.poll(async () => (await recorded(page)).length).toBe(1);
+  await page.waitForTimeout(300);
+  const events = await recorded(page);
+  expect(events.map((e) => e[0])).toEqual(["columnResized"]);
+  const [, col, width] = events[0]!;
   expect(col).toBe(0);
   expect(width).toBeGreaterThan(100);
+  // The reported width is the one AG Grid shows.
+  const shown = (await page.locator('#grid .ag-header-cell[col-id="c0"]').boundingBox())!;
+  expect(Math.round(shown.width)).toBe(width);
 });
 
 test("double click, context menu and keys are forwarded; default scroll/browser keys are swallowed", async ({
