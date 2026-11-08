@@ -125,11 +125,14 @@ export function reduceKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv):
   const move = (dir: Direction): KeyboardResult => {
     if (!sel)
       return { state: { ...state, selection: collapsed({ row: 0, col: 0 }) }, commands: [] };
-    const next = clampMove(sel.focus, dir, env);
+    // As in Excel/Sheets: the anchor is the active cell. Shift+arrows move the range's far
+    // corner (focus); any other move starts from the active cell and collapses the range.
+    const extend = key.shiftKey && arrow !== undefined;
+    const next = clampMove(extend ? sel.focus : sel.anchor, dir, env);
     return {
       state: {
         ...state,
-        selection: key.shiftKey && arrow ? { anchor: sel.anchor, focus: next } : collapsed(next),
+        selection: extend ? { anchor: sel.anchor, focus: next } : collapsed(next),
       },
       commands: [],
     };
@@ -139,20 +142,20 @@ export function reduceKey(state: KeyboardState, key: KeyInfo, env: KeyboardEnv):
   if (key.key === "Tab") return move(key.shiftKey ? "left" : "right");
 
   if (!sel) return { state, commands: [] };
-  const focus = sel.focus;
+  const active = sel.anchor;
   const startEditing = (draft: string, mode: "typing" | "edit"): KeyboardResult =>
     env.readOnly
       ? { state, commands: [] }
       : {
-          state: { selection: collapsed(focus), editing: { cell: focus, draft, mode } },
+          state: { selection: collapsed(active), editing: { cell: active, draft, mode } },
           commands: [],
         };
 
   switch (key.key) {
     case "Enter":
-      return key.shiftKey ? move("up") : startEditing(env.getRawInput(focus), "edit");
+      return key.shiftKey ? move("up") : startEditing(env.getRawInput(active), "edit");
     case "F2":
-      return startEditing(env.getRawInput(focus), "edit");
+      return startEditing(env.getRawInput(active), "edit");
     case "Delete":
     case "Backspace":
       if (env.readOnly) return { state, commands: [] };

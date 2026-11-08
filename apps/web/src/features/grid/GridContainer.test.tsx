@@ -87,7 +87,8 @@ describe("overlay geometry", () => {
 
     act(() => view.scrollTo(0, 24));
     expect(px(screen.getByTestId("selection-rect")).top).toBe(a.y - 24);
-    expect(px(screen.getByTestId("active-cell")).top).toBe(b.y - 24);
+    // The anchor (press point) stays the active cell after a drag, as in Excel/Sheets.
+    expect(px(screen.getByTestId("active-cell")).top).toBe(a.y - 24);
   });
 
   it("clips a partly visible range and hides it when nothing is visible", () => {

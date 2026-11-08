@@ -33,17 +33,30 @@ function setup(opts: Parameters<typeof mountInteraction>[0] = {}) {
 }
 
 describe("keyboard navigation (not editing)", () => {
-  it("arrows move the focus and collapse the selection", () => {
+  it("arrows move from the active cell (the anchor) and collapse the selection", () => {
     const { key, select, selection, view } = setup();
     select(3, 3);
     view.pointerDown(cell(5, 5), { shiftKey: true });
     view.pointerUp(cell(5, 5));
     key("ArrowDown");
-    expect(selection()!.range).toEqual({ start: cell(6, 5), end: cell(6, 5) });
+    expect(selection()!.range).toEqual({ start: cell(4, 3), end: cell(4, 3) });
     key("ArrowLeft");
     key("ArrowUp");
     key("ArrowRight");
-    expect(selection()!.focus).toEqual(cell(5, 5));
+    expect(selection()!.focus).toEqual(cell(3, 3));
+  });
+
+  it("after Shift+arrows, typing edits the active cell (anchor), as in Excel/Sheets", () => {
+    const { key, select, selection, grid, model } = setup();
+    select(0, 0);
+    key("ArrowDown", { shiftKey: true });
+    key("ArrowRight", { shiftKey: true });
+    expect(selection()!.range).toEqual({ start: cell(0, 0), end: cell(1, 1) });
+    key("7");
+    const editing = grid().editing!;
+    expect(selection()!.range).toEqual({ start: cell(0, 0), end: cell(0, 0) });
+    expect(editing.draft).toBe("7");
+    expect([editing.rowId, editing.colId]).toEqual([model.rowIdAt(0), model.colIdAt(0)]);
   });
 
   it("shift+arrows extend from the anchor", () => {

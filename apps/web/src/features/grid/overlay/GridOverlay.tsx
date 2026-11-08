@@ -48,7 +48,8 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
   const mapper: IdMapper = model;
   const resolved = resolveSelection(selection, mapper);
   const selectionRect = resolved && visibleRangeRect(view, resolved.range);
-  const activeRect = resolved && view.getCellRect(resolved.focus);
+  // The anchor is the active cell (Excel/Sheets); Shift+arrows move only the far corner.
+  const activeRect = resolved && view.getCellRect(resolved.anchor);
 
   const editRow = editing ? model.rowIndexOf(editing.rowId) : undefined;
   const editCol = editing ? model.colIndexOf(editing.colId) : undefined;
