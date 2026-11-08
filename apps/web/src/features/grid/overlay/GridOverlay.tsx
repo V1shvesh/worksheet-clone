@@ -16,6 +16,7 @@ import { MAX_ROW_HEIGHT, MIN_ROW_HEIGHT } from "../../../crdt/mutations";
 import { isHeaderHit, rangeContains, type GridView, type Rect } from "../port";
 import { ContextMenu } from "./ContextMenu";
 import { visibleRangeRect } from "./geometry";
+import { RemoteCursors } from "./RemoteCursors";
 
 export interface GridOverlayProps {
   view: GridView;
@@ -109,6 +110,8 @@ export function GridOverlay({ view, model, controller, readOnly }: GridOverlayPr
   return (
     <div className="grid-overlay">
       <ContextMenu view={view} controller={controller} />
+      {/* Below our own selection: ours stays on top. */}
+      <RemoteCursors view={view} model={model} />
       {selectionRect && (
         <div
           className="grid-selection-rect"

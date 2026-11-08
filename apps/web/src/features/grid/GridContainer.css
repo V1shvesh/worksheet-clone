@@ -105,3 +105,33 @@
   color: #9aa0a6;
   cursor: default;
 }
+.grid-remote-selection {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.grid-remote-cursor {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid;
+  pointer-events: none;
+}
+.grid-remote-tag {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  max-width: 120px;
+  padding: 0 4px;
+  overflow: hidden;
+  border-radius: 2px 2px 2px 0;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grid-remote-tag-below {
+  top: 100%;
+  bottom: auto;
+  border-radius: 0 2px 2px 2px;
+}
