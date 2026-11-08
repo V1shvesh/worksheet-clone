@@ -29,7 +29,14 @@ export type CollabAccess = "read-write" | "readonly" | "denied";
 // Runs the real Hocuspocus engine inside the test process and hands it the
 // page's /collab WebSocket via routeWebSocket — real sync protocol, no
 // backend, no database, and nothing protocol-specific to maintain here.
-export async function mockCollab(page: Page, options: { access: CollabAccess }) {
+export async function mockCollab(
+  page: Page,
+  options: {
+    access: CollabAccess;
+    /** The server takes this long to accept the socket (a container waking from sleep). */
+    acceptDelayMs?: number;
+  },
+) {
   const storage = new Map<string, Uint8Array>();
   // Like the real server's sheet-rename notice extension: remember each
   // document's sheet names and broadcast a `sheetRenamed` stateless notice,
@@ -102,14 +109,21 @@ export async function mockCollab(page: Page, options: { access: CollabAccess }) 
         void route.close({ code, reason });
       },
     };
-    const connection = hocuspocus.handleConnection(socket, new Request(route.url()));
-    route.onMessage((message) =>
-      connection.handleMessage(
+    // With a delay, the page's messages queue behind the (late) connection, in order.
+    const accepted = new Promise<void>((resolve) =>
+      setTimeout(resolve, options.acceptDelayMs ?? 0),
+    );
+    const connection = (async () => {
+      if (options.acceptDelayMs) await accepted;
+      return hocuspocus.handleConnection(socket, new Request(route.url()));
+    })();
+    route.onMessage(async (message) =>
+      (await connection).handleMessage(
         typeof message === "string" ? new TextEncoder().encode(message) : new Uint8Array(message),
       ),
     );
-    route.onClose((code, reason) =>
-      connection.handleClose({ code: code ?? 1005, reason: reason ?? "" }),
+    route.onClose(async (code, reason) =>
+      (await connection).handleClose({ code: code ?? 1005, reason: reason ?? "" }),
     );
   });
 

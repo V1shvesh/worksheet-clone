@@ -1,0 +1,13 @@
+.waking-up {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.4rem 1rem;
+  background: #fff8e1;
+  border: 1px solid #f0d98a;
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  z-index: 1000;
+}
