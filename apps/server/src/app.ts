@@ -8,6 +8,7 @@ import { registerHealthRoute } from "./http/health.js";
 import { registerMemberRoutes } from "./http/members.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
+import { awarenessIdentityExtension } from "./realtime/awareness.js";
 import { buildLoggerOptions } from "./logging.js";
 import { mountCollab } from "./realtime/collab.js";
 import { sheetRenameNoticeExtension } from "./realtime/notices.js";
@@ -40,6 +41,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   mountCollab(app, [
     persistenceExtension(app.log, options.persistence),
     sheetRenameNoticeExtension(),
+    awarenessIdentityExtension(app.log),
   ]);
 
   const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
