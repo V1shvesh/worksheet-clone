@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../app/apiErrors";
 import { WorkbookDocProvider } from "../../crdt/WorkbookDoc";
+import { SheetTabs } from "../sheets/SheetTabs";
 import { LiveGrid } from "./LiveGrid";
 import { LiveWorkbook } from "./LiveWorkbook";
 import { useGetWorkbookQuery } from "./workbooksApi";
@@ -25,6 +26,7 @@ export function WorkbookPage() {
           <WorkbookDocProvider workbookId={workbook.id}>
             <LiveWorkbook />
             <LiveGrid />
+            <SheetTabs />
           </WorkbookDocProvider>
         </>
       )}

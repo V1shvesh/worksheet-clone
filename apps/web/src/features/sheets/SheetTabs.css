@@ -1,0 +1,138 @@
+.sheet-tabs {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border: 1px solid #d0d7de;
+  border-top: 0;
+  background: #f6f8fa;
+  font-size: 13px;
+}
+.sheet-tabs-list {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+}
+.sheet-tabs-button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.sheet-tabs-button:hover {
+  background: #eaeef2;
+}
+.sheet-tab-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: none;
+}
+.sheet-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 180px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  border-bottom: 3px solid transparent;
+}
+.sheet-tab:hover {
+  background: #eaeef2;
+}
+.sheet-tab--selected {
+  background: #fff;
+  border-bottom-color: #1a73e8;
+  color: #1a73e8;
+  font-weight: 600;
+}
+.sheet-tab--dragging {
+  opacity: 0.6;
+}
+.sheet-tab--drop-before {
+  box-shadow: inset 3px 0 0 #1a73e8;
+}
+.sheet-tab--drop-after {
+  box-shadow: inset -3px 0 0 #1a73e8;
+}
+.sheet-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-tab-input {
+  width: 120px;
+  font: inherit;
+}
+.sheet-tab-error {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  z-index: 20;
+  padding: 4px 8px;
+  border: 1px solid #cf222e;
+  background: #fff;
+  color: #cf222e;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.sheet-tab-menu-button {
+  border: 0;
+  background: transparent;
+  padding: 0 6px;
+  cursor: pointer;
+  color: inherit;
+}
+.sheet-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px 0;
+  border: 1px solid #d0d7de;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.sheet-menu button {
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.sheet-menu button:hover:not(:disabled),
+.sheet-menu button:focus-visible {
+  background: #eaeef2;
+}
+.sheet-menu button:disabled {
+  color: #8c959f;
+  cursor: default;
+}
+.sheet-tabs-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+}
+.sheet-tabs-dialog [role="dialog"] {
+  max-width: 420px;
+  padding: 16px 20px;
+  background: #fff;
+  border-radius: 6px;
+}
+.sheet-tabs-dialog [role="dialog"] h2 {
+  margin-top: 0;
+  font-size: 16px;
+}
