@@ -121,6 +121,8 @@ Result: identical counts (5 users, 3 workbooks, 2 documents, 2 migrations) and a
 
 ## Pause and resume
 
+- **Idle disconnect (client side).** A tab left open would keep its WebSocket, and so the container, alive. The client therefore calls `provider.disconnect()` after 5 minutes hidden (`IDLE_HIDDEN_MS`) or 30 minutes without pointer/keyboard/wheel/touch input while visible (`IDLE_INPUT_MS`), and `provider.connect()` when the user returns (tab visible, input, or `online`). Unconfirmed changes delay it until confirmed, or `IDLE_UNSYNCED_GRACE_MS` (2 minutes) at most; it never fires during an access-loss state or while the provider is already reconnecting. Constants live in `apps/web/src/crdt/idle.ts`. Edits made while paused are kept in IndexedDB and sync on reconnect. Cost advice (usage limit, Serverless, no pingers, one service) is in `docs/deploy.md`, "Keeping costs low".
+
 - **Idle (automatic).** With Serverless on, Railway stops the container after ~10 minutes without outbound traffic and Neon suspends its compute after 5 idle minutes; both wake on the next request. Cost while asleep is about nothing.
 - **Hard pause.** Railway: service -> Deployments -> remove the active deployment (the service stays configured; or let the usage limit stop it). The site is down; all data stays in Neon. Neon can stay as is (free tier) or be suspended.
 - **Resume.** Redeploy the latest deployment in Railway (or push a commit). Migrations run on start; there is nothing to migrate back. Run the first three items of the first-deploy checklist in `docs/deploy.md`.

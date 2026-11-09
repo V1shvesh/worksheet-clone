@@ -43,6 +43,16 @@ Run in order; stop at the first failure.
 - [ ] Wait ~15 minutes idle: the service shows as sleeping, Neon shows the compute suspended. Open the site: it wakes and works.
 - [ ] Run the local smoke test against the public URL once: `SMOKE_BASE_URL=https://<domain> pnpm test:smoke` (it creates two throwaway users; signup is limited to 5 per hour per IP).
 
+## Keeping costs low
+
+The container only sleeps when nothing keeps it busy, and an open collaboration WebSocket (which the server pings) is exactly that. So the web client hangs up when the user is away (`apps/web/src/crdt/idle.ts`): after the tab has been hidden for 5 minutes, or after 30 minutes without input in a visible tab. The header then says "Paused while you're away"; coming back (tab visible, any input, or the browser going online) reconnects and syncs anything typed meanwhile. Unconfirmed changes delay the hang-up until the server confirms them (at most 2 more minutes). The last client leaving makes the server store and unload the document, after which nothing is sent to anyone.
+
+- Set a Railway **usage limit** (hard limit plus an alert); the Hobby plan is a floor, not a ceiling.
+- Keep **Serverless** enabled on the service.
+- Do not add uptime pingers or monitors that call the app: any outbound traffic keeps it awake (and `/api/health` is deliberately DB-free).
+- Keep **one service** (no private-network peers).
+- To pause hard, remove the active deployment (operations.md, "Pause and resume").
+
 ## 4. Day to day
 
 Deploys happen on push to the branch Railway tracks (set it to `main`; `main` only accepts green CI). Migrations run on start, before the server listens; keep them additive (operations.md). Pause/resume, backups and restores: operations.md.
