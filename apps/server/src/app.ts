@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { config } from "./config.js";
 import { setPoolErrorLogger } from "./db/client.js";
 import { registerAuthRoutes } from "./http/auth.js";
+import { registerCsrfProtection } from "./http/csrf.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
 import { registerMemberRoutes } from "./http/members.js";
@@ -40,6 +41,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   // Must come before any register() so encapsulated route plugins inherit it.
   registerErrorHandler(app);
+  registerCsrfProtection(app);
   registerSecurityHeaders(app, { hsts: options.hsts ?? config.isProduction });
   registerSessionPlugin(app);
   registerHealthRoute(app);

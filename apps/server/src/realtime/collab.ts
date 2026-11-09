@@ -3,6 +3,7 @@ import type { Duplex } from "node:stream";
 import { Hocuspocus, type Extension, type WebSocketLike } from "@hocuspocus/server";
 import crossws from "crossws/adapters/node";
 import type { FastifyInstance } from "fastify";
+import { originMatchesHost } from "../http/same-origin.js";
 import { SESSION_COOKIE_NAME } from "../http/session.js";
 import { authorizeCollabConnection, CollabAuthError, type CollabContext } from "./auth.js";
 
@@ -26,14 +27,7 @@ declare module "fastify" {
 export function isSameOrigin(request: IncomingMessage): boolean {
   const origin = request.headers.origin;
   const host = request.headers.host;
-  if (!origin || !host) {
-    return false;
-  }
-  try {
-    return new URL(origin).host === host;
-  } catch {
-    return false;
-  }
+  return Boolean(origin && host && originMatchesHost(origin, host));
 }
 
 function rejectUpgrade(socket: Duplex, status: string): void {
