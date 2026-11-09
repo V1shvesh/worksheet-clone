@@ -1,0 +1,53 @@
+# Prod-like stack on your machine: the real production image (docker/Dockerfile),
+# NODE_ENV=production, and its OWN Postgres, separate from the development
+# database in docker-compose.yml so the two never share data or ports.
+#   pnpm docker:up     -> http://localhost:8080
+#   pnpm docker:down   (add `-v` by hand to also delete the database volume)
+name: worksheet-prod
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: worksheet
+      POSTGRES_PASSWORD: worksheet
+      POSTGRES_DB: worksheet
+    # No published port: use `docker compose -f docker/docker-compose.prod.yml exec db psql -U worksheet`.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worksheet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: worksheet-clone
+    restart: unless-stopped
+    ports:
+      - "8080:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://worksheet:worksheet@db:5432/worksheet
+      # Local prod-like stack only; production requires >= 32 characters. Real deployments set their own.
+      COOKIE_SECRET: local-compose-only-cookie-secret-0123456789
+    depends_on:
+      db:
+        condition: service_healthy
+    # The server drains on SIGTERM (bounded to ~20 s), so give it room before SIGKILL.
+    stop_grace_period: 30s
+    healthcheck:
+      # /api/health does not touch the database.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:

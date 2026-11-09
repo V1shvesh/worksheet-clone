@@ -21,7 +21,9 @@
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
     "docker:build": "docker build -f docker/Dockerfile -t worksheet-clone .",
-    "docker:up": "docker compose -f docker/docker-compose.yml up",
+    "docker:up": "docker compose -f docker/docker-compose.prod.yml up --build -d --wait",
+    "docker:down": "docker compose -f docker/docker-compose.prod.yml down",
+    "test:smoke": "pnpm --filter @worksheet-clone/web test:smoke",
     "prepare": "husky"
   },
   "devDependencies": {

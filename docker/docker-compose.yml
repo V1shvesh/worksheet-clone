@@ -1,3 +1,5 @@
+# Development database only (`pnpm dev` expects it on localhost:5432). The prod-like
+# stack (the built image + its own database) is docker-compose.prod.yml.
 services:
   postgres:
     image: postgres:17-alpine
@@ -15,22 +17,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      PORT: 3000
-      DATABASE_URL: postgres://worksheet:worksheet@postgres:5432/worksheet
-      # Local prod-like stack only; NODE_ENV=production requires >= 32 chars. Real deployments set their own.
-      COOKIE_SECRET: local-compose-only-cookie-secret-0123456789
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   postgres-data:

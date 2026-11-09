@@ -107,7 +107,9 @@ pnpm test:e2e:web        # Playwright hermetic e2e (no backend needed)
 pnpm db:generate         # drizzle-kit generate migration from schema
 pnpm db:migrate          # apply migrations
 pnpm docker:build        # build production image
-pnpm docker:up           # run prod-like stack locally (app + postgres)
+pnpm docker:up           # run prod-like stack locally (image + own postgres) on :8080
+pnpm docker:down         # stop it
+pnpm test:smoke          # Playwright smoke test against the running docker:up stack
 ```
 
 ## Quality gates
