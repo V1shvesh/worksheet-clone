@@ -79,3 +79,15 @@ The IP comes from the socket unless `TRUST_PROXY` is set. Behind Railway set `TR
 ## Session cleanup
 
 Expired sessions are deleted once at start-up and then hourly (`src/session-cleanup.ts`). The timer is unref'd and cleared on close, so it never keeps the process alive; a sleeping Railway container does not run it, and a run while awake is one cheap `delete ... where expires_at < now()` that lets Neon go back to sleep after its usual 5 idle minutes.
+
+## Dependency audit (`pnpm audit --prod`, 2026-11-09)
+
+Fixed: `@fastify/static` 8 to 10.1.10 (path traversal and route-guard bypass, high), `fastify` to 5.12.8, and via `overrides` in `pnpm-workspace.yaml` the patched `fast-uri` (3.1.9 / 4.2.3) and `ip-address` (10.7.4) that Fastify's and rate-limit's own ranges had not picked up. Remove an override once `pnpm why <pkg>` shows a patched version without it.
+
+Left, with reasons:
+
+- `zod` (high, "memory exhaustion validating oversized constrained collections", fixed only in zod 4): no schema in `packages/shared` constrains an array, set or record, request bodies are capped at 64 KB, and moving shared and web from zod 3 to 4 is a separate migration.
+- `react-router` 6 (two moderate, open redirect via backslash in `<Link>` and SSR hydration `deserializeErrors`): the web app is client-rendered with no SSR; the fix is React Router 7, a web migration outside the server track. The open-redirect advisory applies if a link target comes from user input, so review any `navigate(userValue)` before launch.
+- `minimatch` (moderate): only reachable through `typescript-eslint` in `packages/config` (lint time), not shipped.
+
+Dev-only findings from the full `pnpm audit` (vitest 2 / vite 6 / esbuild / tinypool / undici in test tooling) affect developer machines running the dev server or test UI, not production; upgrading vitest 2 to 4 is a separate task.

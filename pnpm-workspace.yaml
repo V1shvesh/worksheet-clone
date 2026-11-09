@@ -12,3 +12,10 @@ allowBuilds:
 # Required for `pnpm deploy` (docker/Dockerfile's deploy stage) to bundle
 # workspace dependencies as real copies instead of symlinks.
 injectWorkspacePackages: true
+# Security: patched transitive versions that Fastify's/rate-limit's own ranges have
+# not picked up yet (pnpm audit, 2026-11-09). Drop an entry once `pnpm why <pkg>`
+# resolves to a patched version without it.
+overrides:
+  "fast-uri@>=3.0.0 <3.1.9": "3.1.9"
+  "fast-uri@>=4.0.0 <4.2.3": "4.2.3"
+  "ip-address@<=10.7.3": "10.7.4"
