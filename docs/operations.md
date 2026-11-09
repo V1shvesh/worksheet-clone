@@ -31,3 +31,15 @@ The compiled output carries its own copy of the migrations folder (`pnpm build` 
 ## Shutdown
 
 On `SIGTERM`/`SIGINT` (Railway sends SIGTERM on every deploy and when the service sleeps) the server stops accepting connections, closes the WebSockets, waits (bounded to 5 s) for open workbooks to be stored, closes the database pool and exits 0. A second signal, or a drain that takes longer than 20 s, exits 1 immediately. Any workbook the database kept refusing is logged at error level ("shutting down with UNSAVED changes").
+
+## Security headers
+
+`@fastify/helmet` runs on every response (SPA, API, errors). The Content-Security-Policy (`src/http/security-headers.ts`):
+
+```
+default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline';
+img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';
+object-src 'none'; base-uri 'self'; form-action 'self'
+```
+
+`'unsafe-inline'` for styles and `data:` for fonts/images exist because AG Grid injects styles and inlines its icon font in CSS. Scripts allow no inline code or `eval`. `connect-src 'self'` also covers the `/collab` WebSocket (CSP Level 3: `'self'` matches `ws:`/`wss:` on the same host). That was checked in Chromium against the production build (signup, open a workbook, edit, reload: no CSP violations, the socket connects); Firefox and Safari were not run here, so if a browser blocks the socket after a deploy, add `wss://<public host>` to `connect-src`. HSTS (6 months, includeSubDomains, no preload) is sent only when `NODE_ENV=production`.

@@ -8,6 +8,7 @@ import { registerAuthRoutes } from "./http/auth.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
 import { registerMemberRoutes } from "./http/members.js";
+import { registerSecurityHeaders } from "./http/security-headers.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
 import { awarenessIdentityExtension } from "./realtime/awareness.js";
@@ -27,6 +28,8 @@ export interface BuildAppOptions {
   persistence?: PersistenceOptions;
   /** Test seam: capture log lines (default: stdout). */
   logStream?: { write(message: string): void };
+  /** Send Strict-Transport-Security (default: only in production). */
+  hsts?: boolean;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -37,6 +40,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   // Must come before any register() so encapsulated route plugins inherit it.
   registerErrorHandler(app);
+  registerSecurityHeaders(app, { hsts: options.hsts ?? config.isProduction });
   registerSessionPlugin(app);
   registerHealthRoute(app);
   registerAuthRoutes(app);
