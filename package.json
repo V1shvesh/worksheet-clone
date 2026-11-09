@@ -23,6 +23,8 @@
     "docker:build": "docker build -f docker/Dockerfile -t worksheet-clone .",
     "docker:up": "docker compose -f docker/docker-compose.prod.yml up --build -d --wait",
     "docker:down": "docker compose -f docker/docker-compose.prod.yml down",
+    "db:dump": "bash scripts/db-dump.sh",
+    "db:restore": "bash scripts/db-restore.sh",
     "test:smoke": "pnpm --filter @worksheet-clone/web test:smoke",
     "prepare": "husky"
   },

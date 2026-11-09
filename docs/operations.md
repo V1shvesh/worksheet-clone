@@ -91,3 +91,36 @@ Left, with reasons:
 - `minimatch` (moderate): only reachable through `typescript-eslint` in `packages/config` (lint time), not shipped.
 
 Dev-only findings from the full `pnpm audit` (vitest 2 / vite 6 / esbuild / tinypool / undici in test tooling) affect developer machines running the dev server or test UI, not production; upgrading vitest 2 to 4 is a separate task.
+
+## Local prod-like stack and smoke test
+
+`pnpm docker:up` builds the image and starts it with its own Postgres (`docker/docker-compose.prod.yml`, project `worksheet-prod`) on http://localhost:8080; `pnpm docker:down` stops it (the data volume stays). The development database in `docker/docker-compose.yml` is separate. `pnpm test:smoke` runs `apps/web/e2e/smoke` against it (set `SMOKE_BASE_URL` for another host). Production-mode rate limits apply: signup is 5 per hour per IP and counted in memory, and a run uses 2 signups, so after two runs in an hour do `docker compose -f docker/docker-compose.prod.yml restart app`.
+
+Checked by hand on 2026-11-09: restarting the app container keeps the data and the second start logs `database is up to date` (`applied: []`); `docker compose stop app` logs `SIGTERM received: shutting down`, unloads every open workbook (stored to Postgres), exits 0 in about 0.3 s, and an edit made just before the stop was readable by a fresh browser afterwards.
+
+## Backups and restore
+
+- **Neon (production).** Point-in-time restore is built in (free tier: a short history window, check the current length in the console). To restore: Neon console -> Branches -> Restore (or create a branch at a past time), then point `DATABASE_URL` / `DATABASE_URL_UNPOOLED` at the restored branch, or copy data back. Do this for accidents; do not rely on it as the only copy.
+- **Your own dumps.** `pnpm db:dump` writes `backups/worksheet-<timestamp>.dump` (custom format, gitignored). With no `DATABASE_URL` it dumps the local prod-like stack; with `DATABASE_URL=<neon unpooled url>?sslmode=verify-full pnpm db:dump` it dumps that database (pg_dump runs in a `postgres:17-alpine` container, so no local client is needed). Do this before risky migrations and on a schedule you will actually keep.
+- **Restore.** `pnpm db:restore backups/<file>.dump [name]` restores into a FRESH database (default `worksheet_restore`, dropped and recreated) on the local prod-like stack, so a restore can be inspected before anything is switched over. `RESTORE_DATABASE_URL=<url> pnpm db:restore <file>` restores into an existing database instead (with `--clean --if-exists`: it drops what it replaces, so aim it at a new Neon branch, never at production by reflex).
+
+Rehearsed 2026-11-09 against the local stack (a workbook with `5`, `10`, `=SUM(A1:A2)`, `from bob` created by the smoke test):
+
+```bash
+pnpm docker:up
+pnpm test:smoke
+pnpm db:dump                       # backups/worksheet-20261109-145859.dump (20270 bytes)
+pnpm db:restore backups/worksheet-20261109-145859.dump
+# compare live and restored databases
+docker compose -f docker/docker-compose.prod.yml exec -T db psql -U worksheet -d worksheet_restore -tAc \
+  "select (select count(*) from users),(select count(*) from workbooks),(select count(*) from yjs_documents),
+   (select md5(string_agg(md5(state),',' order by workbook_id)) from yjs_documents)"
+```
+
+Result: identical counts (5 users, 3 workbooks, 2 documents, 2 migrations) and an identical md5 over every document state in `worksheet` and `worksheet_restore`. The restored Y.Doc was also decoded with `yjs`: cells `5`, `10`, the `=SUM` formula (id-based refs) and `from bob` were all present.
+
+## Pause and resume
+
+- **Idle (automatic).** With Serverless on, Railway stops the container after ~10 minutes without outbound traffic and Neon suspends its compute after 5 idle minutes; both wake on the next request. Cost while asleep is about nothing.
+- **Hard pause.** Railway: service -> Deployments -> remove the active deployment (the service stays configured; or let the usage limit stop it). The site is down; all data stays in Neon. Neon can stay as is (free tier) or be suspended.
+- **Resume.** Redeploy the latest deployment in Railway (or push a commit). Migrations run on start; there is nothing to migrate back. Run the first three items of the first-deploy checklist in `docs/deploy.md`.

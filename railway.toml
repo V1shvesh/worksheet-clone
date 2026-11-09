@@ -1,0 +1,22 @@
+# Railway config-as-code. Keys follow https://docs.railway.com/config-as-code/reference
+# (build.builder, build.dockerfilePath, deploy.healthcheckPath, deploy.healthcheckTimeout,
+# deploy.restartPolicyType, deploy.restartPolicyMaxRetries). Not verified against a
+# live Railway project: nothing has been deployed yet.
+#
+# NOT set here, but in the Railway dashboard (see docs/deploy.md):
+#   - Serverless / app sleeping (Settings -> Serverless)
+#   - the monthly usage (spend) limit
+#   - environment variables and secrets
+"$schema" = "https://railway.com/railway.schema.json"
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/Dockerfile"
+
+[deploy]
+# Does not touch the database, so a health check never wakes Neon.
+healthcheckPath = "/api/health"
+# Seconds to wait for the first healthy response (migrations run before listening).
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
