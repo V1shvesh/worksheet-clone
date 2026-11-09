@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
+import { config } from "./config.js";
 import { setPoolErrorLogger } from "./db/client.js";
 import { registerAuthRoutes } from "./http/auth.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
@@ -19,8 +20,7 @@ import { persistenceExtension, type PersistenceOptions } from "./realtime/persis
 // two levels up from this file. The final Docker runtime stage copies that
 // directory to a fixed location and points WEB_DIST_DIR at it instead,
 // since it doesn't keep the monorepo's directory layout.
-const webDistDir =
-  process.env.WEB_DIST_DIR ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
+const webDistDir = config.webDistDir ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
 
 export interface BuildAppOptions {
   /** Test seams (failing store, short retry delays); production passes none. */
@@ -48,7 +48,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     awarenessIdentityExtension(app.log),
   ]);
 
-  const serveSpa = process.env.NODE_ENV === "production" && existsSync(webDistDir);
+  const serveSpa = config.isProduction && existsSync(webDistDir);
   if (serveSpa) {
     void app.register(fastifyStatic, {
       root: webDistDir,

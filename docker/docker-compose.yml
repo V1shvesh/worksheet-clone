@@ -26,6 +26,8 @@ services:
     environment:
       PORT: 3000
       DATABASE_URL: postgres://worksheet:worksheet@postgres:5432/worksheet
+      # Local prod-like stack only; NODE_ENV=production requires >= 32 chars. Real deployments set their own.
+      COOKIE_SECRET: local-compose-only-cookie-secret-0123456789
     depends_on:
       postgres:
         condition: service_healthy

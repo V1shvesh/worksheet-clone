@@ -5,6 +5,9 @@ export default defineConfig({
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://worksheet:worksheet@localhost:5432/worksheet",
+    url:
+      process.env.DATABASE_URL_UNPOOLED ??
+      process.env.DATABASE_URL ??
+      "postgres://worksheet:worksheet@localhost:5432/worksheet",
   },
 });

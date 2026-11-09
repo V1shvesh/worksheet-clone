@@ -1,6 +1,7 @@
 import cookie from "@fastify/cookie";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthUser } from "@worksheet-clone/shared";
+import { config } from "../config.js";
 import { getSessionUser } from "../domain/auth.js";
 import { DomainError } from "../domain/errors.js";
 
@@ -13,19 +14,15 @@ declare module "fastify" {
 export const SESSION_COOKIE_NAME = "session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
-// Dev-only fallback so local/test runs don't need a .env file; production
-// (Railway) always sets COOKIE_SECRET explicitly.
-const COOKIE_SECRET = process.env.COOKIE_SECRET ?? "dev-only-insecure-cookie-secret-change-me";
-
 export function registerSessionPlugin(app: FastifyInstance): void {
-  void app.register(cookie, { secret: COOKIE_SECRET });
+  void app.register(cookie, { secret: config.cookieSecret });
 }
 
 export function setSessionCookie(reply: FastifyReply, sessionId: string): void {
   reply.setCookie(SESSION_COOKIE_NAME, sessionId, {
     path: "/",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: config.isProduction,
     sameSite: "lax",
     signed: true,
     maxAge: SESSION_MAX_AGE_SECONDS,
