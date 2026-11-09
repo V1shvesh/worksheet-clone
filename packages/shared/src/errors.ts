@@ -10,6 +10,7 @@ export const apiErrorCodes = [
   "INVALID_MEMBER_OPERATION",
   "RATE_LIMITED",
   "UNSUPPORTED_MEDIA_TYPE",
+  "PAYLOAD_TOO_LARGE",
   "INTERNAL_ERROR",
 ] as const;
 

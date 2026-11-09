@@ -12,6 +12,8 @@ import { registerMemberRoutes } from "./http/members.js";
 import { registerSecurityHeaders } from "./http/security-headers.js";
 import { registerSessionPlugin } from "./http/session.js";
 import { registerWorkbookRoutes } from "./http/workbooks.js";
+import { LIMITS, type Limits } from "@worksheet-clone/shared";
+import { docSizeLimitExtension } from "./realtime/doc-size-limit.js";
 import { awarenessIdentityExtension } from "./realtime/awareness.js";
 import { buildLoggerOptions } from "./logging.js";
 import { mountCollab } from "./realtime/collab.js";
@@ -31,10 +33,16 @@ export interface BuildAppOptions {
   logStream?: { write(message: string): void };
   /** Send Strict-Transport-Security (default: only in production). */
   hsts?: boolean;
+  /** Test seam: override the size limits (defaults: LIMITS from shared). */
+  limits?: Partial<Limits>;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: buildLoggerOptions(options.logStream) });
+  const limits: Limits = { ...LIMITS, ...options.limits };
+  const app = Fastify({
+    logger: buildLoggerOptions(options.logStream),
+    bodyLimit: limits.restBodyBytes,
+  });
   setPoolErrorLogger((err) =>
     app.log.warn({ err }, "postgres dropped an idle connection; the pool will reconnect"),
   );
@@ -48,11 +56,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerAuthRoutes(app);
   registerWorkbookRoutes(app);
   registerMemberRoutes(app);
-  mountCollab(app, [
-    persistenceExtension(app.log, options.persistence),
-    sheetRenameNoticeExtension(),
-    awarenessIdentityExtension(app.log),
-  ]);
+  mountCollab(
+    app,
+    [
+      docSizeLimitExtension(app.log, { docBytes: limits.docBytes }),
+      persistenceExtension(app.log, options.persistence),
+      sheetRenameNoticeExtension(),
+      awarenessIdentityExtension(app.log),
+    ],
+    { wsMessageBytes: limits.wsMessageBytes },
+  );
 
   const serveSpa = config.isProduction && existsSync(webDistDir);
   if (serveSpa) {

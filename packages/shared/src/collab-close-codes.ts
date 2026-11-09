@@ -5,7 +5,8 @@ export const COLLAB_CLOSE_CODES = {
   // code (4205, not exported by @hocuspocus/server): the provider reconnects
   // and onAuthenticate decides afresh.
   accessChanged: 4205,
-  // Reserved for the document size cap (M9); not sent yet.
+  // The workbook document would exceed LIMITS.docBytes: the update that would
+  // have grown it past the cap was NOT applied and the sender is disconnected.
   tooLarge: 4413,
 } as const;
 

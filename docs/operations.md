@@ -43,3 +43,18 @@ object-src 'none'; base-uri 'self'; form-action 'self'
 ```
 
 `'unsafe-inline'` for styles and `data:` for fonts/images exist because AG Grid injects styles and inlines its icon font in CSS. Scripts allow no inline code or `eval`. `connect-src 'self'` also covers the `/collab` WebSocket (CSP Level 3: `'self'` matches `ws:`/`wss:` on the same host). That was checked in Chromium against the production build (signup, open a workbook, edit, reload: no CSP violations, the socket connects); Firefox and Safari were not run here, so if a browser blocks the socket after a deploy, add `wss://<public host>` to `connect-src`. HSTS (6 months, includeSubDomains, no preload) is sent only when `NODE_ENV=production`.
+
+## Size limits
+
+Defined once in `packages/shared/src/limits.ts` (`LIMITS`) so the client can check before sending.
+
+| Limit                                | Value  | Enforced in                                              | What happens                                             |
+| ------------------------------------ | ------ | -------------------------------------------------------- | -------------------------------------------------------- |
+| REST body (`restBodyBytes`)          | 64 KB  | Fastify `bodyLimit`                                      | `413 { error: { code: "PAYLOAD_TOO_LARGE" } }`           |
+| WebSocket message (`wsMessageBytes`) | 2 MB   | `ws` `maxPayload` (via crossws `serverOptions`)          | socket closed with 1009                                  |
+| Workbook document (`docBytes`)       | 10 MB  | `realtime/doc-size-limit.ts`, `beforeHandleMessage`      | see below                                                |
+| Cell text (`cellChars`)              | 32 767 | not enforced on the server (cells live inside the Y.Doc) | exported for the client to enforce when a cell is edited |
+
+**When a document would exceed its cap.** The check runs before Hocuspocus applies an incoming update. If the running size estimate says it might not fit, the server measures the real document, applies the update to a throwaway copy and measures that. An update is refused only if the result is over the cap _and_ larger than the current document (so a workbook at or over the cap can always shrink). A refused update is never applied, never broadcast to collaborators and never stored. The sender's socket is closed with code 4413 and reason `too-large`; collaborators are unaffected. A CRDT cannot take an update back once applied, which is why the check is before and not after.
+
+Limits of that: the sender's browser still holds its oversized change (in memory and in its on-device cache), and a provider that reconnects re-sends it and is refused again, so the client must stop reconnecting on 4413 and tell the user. Documents already over the cap when the rule shipped keep working and can only shrink. The size estimate may overcount (it sums update sizes) and then costs one extra measurement; measuring is O(document) and only happens for workbooks within one update of the cap.

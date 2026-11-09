@@ -14,6 +14,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   INVALID_MEMBER_OPERATION: 409,
   RATE_LIMITED: 429,
   UNSUPPORTED_MEDIA_TYPE: 415,
+  PAYLOAD_TOO_LARGE: 413,
   INTERNAL_ERROR: 500,
 };
 
@@ -56,6 +57,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
     const status = error.statusCode ?? 500;
     if (status === 429) {
       sendApiError(reply, "RATE_LIMITED", "Too many attempts. Please wait and try again.");
+      return;
+    }
+    if (status === 413) {
+      sendApiError(reply, "PAYLOAD_TOO_LARGE", "Request body is too large");
       return;
     }
     if (status >= 400 && status < 500) {

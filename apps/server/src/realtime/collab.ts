@@ -4,6 +4,7 @@ import { Hocuspocus, type Extension, type WebSocketLike } from "@hocuspocus/serv
 import crossws from "crossws/adapters/node";
 import type { FastifyInstance } from "fastify";
 import { originMatchesHost } from "../http/same-origin.js";
+import { LIMITS } from "@worksheet-clone/shared";
 import { SESSION_COOKIE_NAME } from "../http/session.js";
 import { authorizeCollabConnection, CollabAuthError, type CollabContext } from "./auth.js";
 
@@ -35,7 +36,11 @@ function rejectUpgrade(socket: Duplex, status: string): void {
   socket.destroy();
 }
 
-export function mountCollab(app: FastifyInstance, extensions: Extension[] = []): void {
+export function mountCollab(
+  app: FastifyInstance,
+  extensions: Extension[] = [],
+  options: { wsMessageBytes?: number } = {},
+): void {
   const cookies = {
     readSessionId(cookieHeader: string | null): string | null {
       const raw = cookieHeader ? app.parseCookie(cookieHeader)[SESSION_COOKIE_NAME] : undefined;
@@ -85,6 +90,9 @@ export function mountCollab(app: FastifyInstance, extensions: Extension[] = []):
   // Same wiring as Hocuspocus's own Server, but on Fastify's HTTP server so
   // REST, the SPA and /collab share one port and one origin.
   const ws = crossws({
+    // ws closes a socket whose message exceeds this with 1009 (message too big)
+    // before the frame is buffered in full.
+    serverOptions: { maxPayload: options.wsMessageBytes ?? LIMITS.wsMessageBytes },
     hooks: {
       open(peer) {
         const connection = hocuspocus.handleConnection(
