@@ -119,6 +119,8 @@ Goal: an empty app that is linted, tested, containerized and live on Railway.
 - Reorder rows/columns by dragging selected headers (Sheets-style), built on the port's pointer events for both axes; the order arrays already de-duplicate concurrent moves on read (deferred from M7, 2026-11-08)
 - Opening the app while offline (a service worker caching the SPA shell and the last REST responses); M8 only keeps edits made while the tab was already open, or across a closed tab once back online
 - Recovery export as one file (zip of per-sheet CSVs, or XLSX) instead of one CSV download per sheet
+- Dark theme for the grid itself (AG Grid theme params from the same tokens); today the app chrome follows the system theme but the grid stays light
+- Dependency majors flagged by the audit: zod 4 (fixes a high-severity advisory in features we don't use) and react-router 7
 - Unique sheet names under concurrency: two users adding or renaming sheets at the same instant can end up with two sheets of the same name (each client only checks its own copy). Existing formulas are unaffected because they store sheet ids; a newly typed `Name!A1` resolves to the first matching sheet in tab order, the same on every client. A fix would be a server-side rename of the later duplicate (e.g. "Sheet2 (2)").
 
 ---

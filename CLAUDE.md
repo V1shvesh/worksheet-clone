@@ -134,7 +134,7 @@ Never bypass hooks with `--no-verify`. A change is done only when the relevant t
 ## Current status
 
 - [x] Stack and architecture decided (see `PROJECT_CONTEXT.md`)
-- [~] M0 — Walking skeleton (repo, tooling, CI, Docker, deployed hello-world) — built and verified locally; not yet deployed (see status narrative)
+- [~] M0 — Walking skeleton (repo, tooling, CI, Docker, deployed hello-world) — built and verified locally, Docker image fixed in M9; not yet deployed (see `docs/deploy.md`)
 - [x] M1 — Auth
 - [x] M2 — Workbooks + ACL
 - [x] M3 — Realtime document backbone
@@ -144,6 +144,6 @@ Never bypass hooks with `--no-verify`. A change is done only when the relevant t
 - [x] M6 — Formatting, formula bar, undo/redo, clipboard, fill handle
 - [x] M7 — Row/column structure ops (reorder deferred)
 - [x] M8 — Resilience: errors, offline, rollback, presence
-- [ ] M9 — Production hardening ← **next**
+- [x] M9 — Production hardening (local; deploy pending the owner's go-ahead)
 
 Update this list (and the narrative in `PROJECT_CONTEXT.md`) when a milestone completes.
