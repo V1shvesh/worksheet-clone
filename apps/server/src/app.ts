@@ -4,14 +4,13 @@ import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { config } from "./config.js";
 import { setPoolErrorLogger } from "./db/client.js";
-import { registerAuthRoutes } from "./http/auth.js";
+import { registerApiRoutes } from "./http/api.js";
 import { registerCsrfProtection } from "./http/csrf.js";
 import { registerErrorHandler, sendApiError } from "./http/errors.js";
 import { registerHealthRoute } from "./http/health.js";
-import { registerMemberRoutes } from "./http/members.js";
+import { DEFAULT_RATE_LIMITS, TEST_RATE_LIMITS, type RateLimits } from "./http/rate-limits.js";
 import { registerSecurityHeaders } from "./http/security-headers.js";
 import { registerSessionPlugin } from "./http/session.js";
-import { registerWorkbookRoutes } from "./http/workbooks.js";
 import { LIMITS, type Limits } from "@worksheet-clone/shared";
 import { docSizeLimitExtension } from "./realtime/doc-size-limit.js";
 import { awarenessIdentityExtension } from "./realtime/awareness.js";
@@ -35,13 +34,28 @@ export interface BuildAppOptions {
   hsts?: boolean;
   /** Test seam: override the size limits (defaults: LIMITS from shared). */
   limits?: Partial<Limits>;
+  /** Override the rate limits (default: DEFAULT_RATE_LIMITS; relaxed under NODE_ENV=test). */
+  rateLimits?: Partial<RateLimits>;
+  /** Override TRUST_PROXY (Fastify's trustProxy: believe X-Forwarded-For for request.ip). */
+  trustProxy?: boolean | number;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const limits: Limits = { ...LIMITS, ...options.limits };
+  const rateLimits: RateLimits = {
+    ...(config.nodeEnv === "test" ? TEST_RATE_LIMITS : DEFAULT_RATE_LIMITS),
+    ...options.rateLimits,
+  };
+  const trustProxy = options.trustProxy ?? config.trustProxy;
   const app = Fastify({
     logger: buildLoggerOptions(options.logStream),
     bodyLimit: limits.restBodyBytes,
+    // Fastify's types only list the boolean/function forms; a hop count is the
+    // function "trust the first N hops from the socket" (what proxy-addr does for a number).
+    trustProxy:
+      typeof trustProxy === "number"
+        ? (_address: string, hop: number) => hop < trustProxy
+        : trustProxy,
   });
   setPoolErrorLogger((err) =>
     app.log.warn({ err }, "postgres dropped an idle connection; the pool will reconnect"),
@@ -53,9 +67,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerSecurityHeaders(app, { hsts: options.hsts ?? config.isProduction });
   registerSessionPlugin(app);
   registerHealthRoute(app);
-  registerAuthRoutes(app);
-  registerWorkbookRoutes(app);
-  registerMemberRoutes(app);
+  registerApiRoutes(app, rateLimits);
   mountCollab(
     app,
     [
@@ -64,7 +76,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       sheetRenameNoticeExtension(),
       awarenessIdentityExtension(app.log),
     ],
-    { wsMessageBytes: limits.wsMessageBytes },
+    {
+      wsMessageBytes: limits.wsMessageBytes,
+      wsUpgrade: { perMinute: rateLimits.wsUpgradePerMinute, trustProxy },
+    },
   );
 
   const serveSpa = config.isProduction && existsSync(webDistDir);

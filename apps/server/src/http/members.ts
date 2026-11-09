@@ -8,9 +8,10 @@ import {
 import { addMember, changeMemberRole, listMembers, removeMember } from "../domain/members.js";
 import { revokeUserAccess } from "../realtime/access.js";
 import { parseOrThrow } from "./errors.js";
+import { perUserRateLimit, type TokenBucketLimiter } from "./rate-limits.js";
 import { currentUser, requireUser } from "./session.js";
 
-export function registerMemberRoutes(app: FastifyInstance): void {
+export function registerMemberRoutes(app: FastifyInstance, addLimiter: TokenBucketLimiter): void {
   void app.register(async (scope) => {
     scope.addHook("preHandler", requireUser);
 
@@ -19,13 +20,17 @@ export function registerMemberRoutes(app: FastifyInstance): void {
       return { members: await listMembers(currentUser(request).id, id) };
     });
 
-    scope.post("/api/workbooks/:id/members", async (request, reply) => {
-      const { id } = parseOrThrow(workbookParamsSchema, request.params, "NOT_FOUND");
-      const { email, role } = parseOrThrow(addMemberSchema, request.body);
-      const member = await addMember(currentUser(request).id, id, email, role);
-      reply.code(201);
-      return { member };
-    });
+    scope.post(
+      "/api/workbooks/:id/members",
+      { preHandler: perUserRateLimit(addLimiter, "member invitations") },
+      async (request, reply) => {
+        const { id } = parseOrThrow(workbookParamsSchema, request.params, "NOT_FOUND");
+        const { email, role } = parseOrThrow(addMemberSchema, request.body);
+        const member = await addMember(currentUser(request).id, id, email, role);
+        reply.code(201);
+        return { member };
+      },
+    );
 
     scope.patch("/api/workbooks/:id/members/:userId", async (request) => {
       const { id, userId } = parseOrThrow(memberParamsSchema, request.params, "NOT_FOUND");

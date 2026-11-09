@@ -16,6 +16,7 @@ import {
 import { revokeAllAccess } from "../realtime/access.js";
 import { broadcastWorkbookRenamed } from "../realtime/notices.js";
 import { parseOrThrow } from "./errors.js";
+import { perUserRateLimit, type TokenBucketLimiter } from "./rate-limits.js";
 import { currentUser, requireUser } from "./session.js";
 
 function toSummary(workbook: WorkbookWithRole): WorkbookSummary {
@@ -28,7 +29,10 @@ function toSummary(workbook: WorkbookWithRole): WorkbookSummary {
   };
 }
 
-export function registerWorkbookRoutes(app: FastifyInstance): void {
+export function registerWorkbookRoutes(
+  app: FastifyInstance,
+  createLimiter: TokenBucketLimiter,
+): void {
   void app.register(async (scope) => {
     scope.addHook("preHandler", requireUser);
 
@@ -37,12 +41,16 @@ export function registerWorkbookRoutes(app: FastifyInstance): void {
       return { workbooks: workbooks.map(toSummary) };
     });
 
-    scope.post("/api/workbooks", async (request, reply) => {
-      const { name } = parseOrThrow(createWorkbookSchema, request.body);
-      const workbook = await createWorkbook(currentUser(request).id, name);
-      reply.code(201);
-      return { workbook: toSummary(workbook) };
-    });
+    scope.post(
+      "/api/workbooks",
+      { preHandler: perUserRateLimit(createLimiter, "new workbooks") },
+      async (request, reply) => {
+        const { name } = parseOrThrow(createWorkbookSchema, request.body);
+        const workbook = await createWorkbook(currentUser(request).id, name);
+        reply.code(201);
+        return { workbook: toSummary(workbook) };
+      },
+    );
 
     // A malformed id can't name a workbook, so it's NOT_FOUND like any other
     // unknown id (and never reaches Postgres as an invalid uuid).

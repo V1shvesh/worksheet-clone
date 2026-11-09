@@ -3,6 +3,7 @@ import type { Duplex } from "node:stream";
 import { Hocuspocus, type Extension, type WebSocketLike } from "@hocuspocus/server";
 import crossws from "crossws/adapters/node";
 import type { FastifyInstance } from "fastify";
+import { clientAddress, TokenBucketLimiter } from "../http/rate-limits.js";
 import { originMatchesHost } from "../http/same-origin.js";
 import { LIMITS } from "@worksheet-clone/shared";
 import { SESSION_COOKIE_NAME } from "../http/session.js";
@@ -31,15 +32,24 @@ export function isSameOrigin(request: IncomingMessage): boolean {
   return Boolean(origin && host && originMatchesHost(origin, host));
 }
 
-function rejectUpgrade(socket: Duplex, status: string): void {
-  socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\n\r\n`);
+function rejectUpgrade(
+  socket: Duplex,
+  status: string,
+  headers: Record<string, string | number> = {},
+): void {
+  const extra = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
+  socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\n${extra.join("")}\r\n`);
   socket.destroy();
 }
 
 export function mountCollab(
   app: FastifyInstance,
   extensions: Extension[] = [],
-  options: { wsMessageBytes?: number } = {},
+  options: {
+    wsMessageBytes?: number;
+    /** Per-IP limit on upgrade attempts (a burst of perMinute, refilling perMinute per minute). */
+    wsUpgrade?: { perMinute: number; trustProxy: boolean | number };
+  } = {},
 ): void {
   const cookies = {
     readSessionId(cookieHeader: string | null): string | null {
@@ -123,6 +133,10 @@ export function mountCollab(
     },
   });
 
+  const upgradeLimiter = options.wsUpgrade
+    ? new TokenBucketLimiter(options.wsUpgrade.perMinute, options.wsUpgrade.perMinute)
+    : undefined;
+
   app.server.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (path !== COLLAB_PATH) {
@@ -132,6 +146,15 @@ export function mountCollab(
     if (!isSameOrigin(request)) {
       rejectUpgrade(socket, "403 Forbidden");
       return;
+    }
+    if (upgradeLimiter && options.wsUpgrade) {
+      const verdict = upgradeLimiter.take(clientAddress(request, options.wsUpgrade.trustProxy));
+      if (!verdict.allowed) {
+        rejectUpgrade(socket, "429 Too Many Requests", {
+          "Retry-After": verdict.retryAfterSeconds,
+        });
+        return;
+      }
     }
     void ws.handleUpgrade(request, socket, head);
   });

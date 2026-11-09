@@ -58,3 +58,20 @@ Defined once in `packages/shared/src/limits.ts` (`LIMITS`) so the client can che
 **When a document would exceed its cap.** The check runs before Hocuspocus applies an incoming update. If the running size estimate says it might not fit, the server measures the real document, applies the update to a throwaway copy and measures that. An update is refused only if the result is over the cap _and_ larger than the current document (so a workbook at or over the cap can always shrink). A refused update is never applied, never broadcast to collaborators and never stored. The sender's socket is closed with code 4413 and reason `too-large`; collaborators are unaffected. A CRDT cannot take an update back once applied, which is why the check is before and not after.
 
 Limits of that: the sender's browser still holds its oversized change (in memory and in its on-device cache), and a provider that reconnects re-sends it and is refused again, so the client must stop reconnecting on 4413 and tell the user. Documents already over the cap when the rule shipped keep working and can only shrink. The size estimate may overcount (it sums update sizes) and then costs one extra measurement; measuring is O(document) and only happens for workbooks within one update of the cap.
+
+## Rate limits
+
+Defaults live in `src/http/rate-limits.ts` (`DEFAULT_RATE_LIMITS`); `buildApp({ rateLimits })` overrides them (under `NODE_ENV=test` an unconfigured app gets relaxed values so suites that sign up dozens of users do not trip them; login keeps its real limit). Counters are in memory, per process.
+
+| What                                 | Limit                              | Keyed by       | Mechanism                            |
+| ------------------------------------ | ---------------------------------- | -------------- | ------------------------------------ |
+| `/api` in general (health is exempt) | 300 / minute                       | IP             | `@fastify/rate-limit`                |
+| `POST /api/auth/signup`              | 5 / hour                           | IP             | `@fastify/rate-limit` (route config) |
+| `POST /api/auth/login`               | 5 / minute                         | IP             | `@fastify/rate-limit` (route config) |
+| `POST /api/workbooks`                | 30 / minute                        | signed-in user | token bucket, after `requireUser`    |
+| `POST /api/workbooks/:id/members`    | 30 / minute                        | signed-in user | token bucket, after `requireUser`    |
+| `/collab` upgrade attempts           | burst of 60, refilling 60 / minute | IP             | token bucket in the upgrade handler  |
+
+Every refusal is `429` with `{ error: { code: "RATE_LIMITED", message } }` and a `Retry-After` header (WebSocket upgrades get a bare `HTTP/1.1 429` with `Retry-After`). Signup and login have their own counters and are not counted against the 300/minute one.
+
+The IP comes from the socket unless `TRUST_PROXY` is set. Behind Railway set `TRUST_PROXY=1` (one proxy in front: the client is the last `X-Forwarded-For` entry) and check in the logs that `req.remoteAddress` shows real client addresses; a larger number means more proxies, `true` believes the leftmost (forgeable) entry. Without it every request would share the proxy's address and a single user could exhaust everybody's budget; with it set wrongly (too many hops) the limits can be bypassed by spoofing the header.
