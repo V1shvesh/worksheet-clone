@@ -53,6 +53,17 @@ describe("ConnectionStatus", () => {
     expect(status()).toHaveAttribute("title", "2 changes waiting to sync");
   });
 
+  it("says it is paused while the user is away, with a reconnect hint", () => {
+    const store = setup();
+    act(() => {
+      store.dispatch(collabActions.pausedChanged(true));
+      store.dispatch(collabActions.statusChanged("disconnected"));
+    });
+    expect(status()).toHaveTextContent("Paused while you're away");
+    expect(status()).toHaveAttribute("title", "Reconnects when you come back");
+    expect(status()).toHaveAttribute("data-sync-status", "paused");
+  });
+
   it("shows reconnecting and the save-failing message", () => {
     const store = setup();
     act(() => void store.dispatch(collabActions.saveFailed()));

@@ -168,9 +168,14 @@ export async function mockCollab(
       if (uplinkHeld) uplink.push({ route, deliver });
       else await deliver();
     });
-    route.onClose(async (code, reason) =>
-      (await connection).handleClose({ code: code ?? 1005, reason: reason ?? "" }),
-    );
+    route.onClose(async (code, reason) => {
+      const at = sockets.indexOf(route);
+      if (at >= 0) sockets.splice(at, 1);
+      (await connection).handleClose({ code: code ?? 1005, reason: reason ?? "" });
+      // Finish the closing handshake for a page-initiated close (the page's socket otherwise
+      // never reports "closed"). A close the server started has already completed this.
+      await route.close({ code: code ?? 1000, reason: reason ?? "" }).catch(() => undefined);
+    });
   });
 
   return {
@@ -313,6 +318,20 @@ export async function mockCollab(
     /** How many sockets the page has opened so far (refused ones excluded). */
     connectionCount(): number {
       return connectionsOpened;
+    },
+    /**
+     * Sends the page a message it ignores. A real server's traffic keeps the provider's liveness
+     * check (30 s without any message closes the socket) satisfied; specs that move the page's
+     * clock call this after each step.
+     */
+    heartbeat(workbookId: string): void {
+      hocuspocus.documents
+        .get(workbookId)
+        ?.broadcastStateless(JSON.stringify({ type: "heartbeat" }));
+    },
+    /** How many of those sockets are open right now. */
+    openConnectionCount(): number {
+      return sockets.length;
     },
     /** What the next authentication grants. */
     setAccess(next: CollabAccess): void {

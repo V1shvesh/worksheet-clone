@@ -17,6 +17,8 @@ export interface CollabState {
   unsyncedChanges: number;
   /** navigator.onLine. */
   online: boolean;
+  /** The client hung up on purpose because the user is away (see idle.ts); it reconnects on return. */
+  paused: boolean;
   /** The server told us it can't persist (set by the notice handler). */
   saveFailing: boolean;
   /** Set once access dropped mid-session (see AccessLoss); null while all is well. */
@@ -33,7 +35,7 @@ export interface AccessLoss {
 }
 
 export type SyncStatus =
-  "saved" | "saving" | "offline" | "reconnecting" | "connecting" | "saveFailing";
+  "saved" | "saving" | "offline" | "paused" | "reconnecting" | "connecting" | "saveFailing";
 
 /**
  * What the header indicator says. "Saved" means the server has the change:
@@ -43,10 +45,11 @@ export type SyncStatus =
 export function syncStatus(
   state: Pick<
     CollabState,
-    "status" | "synced" | "hasSynced" | "unsyncedChanges" | "online" | "saveFailing"
+    "status" | "synced" | "hasSynced" | "unsyncedChanges" | "online" | "saveFailing" | "paused"
   >,
 ): SyncStatus {
   if (!state.online) return "offline";
+  if (state.paused) return "paused";
   if (state.status !== "connected" || !state.synced) {
     return state.hasSynced || state.status === "disconnected" ? "reconnecting" : "connecting";
   }
@@ -63,6 +66,7 @@ const initialState: CollabState = {
   hasSynced: false,
   unsyncedChanges: 0,
   online: true,
+  paused: false,
   saveFailing: false,
   accessLoss: null,
 };
@@ -78,6 +82,7 @@ export const collabSlice = createSlice({
     },
     statusChanged(state, action: PayloadAction<ConnectionStatus>) {
       state.status = action.payload;
+      if (action.payload === "connected") state.paused = false;
       if (action.payload !== "connected") {
         state.synced = false;
       }
@@ -96,6 +101,9 @@ export const collabSlice = createSlice({
     },
     onlineChanged(state, action: PayloadAction<boolean>) {
       state.online = action.payload;
+    },
+    pausedChanged(state, action: PayloadAction<boolean>) {
+      state.paused = action.payload;
     },
     saveFailed(state) {
       state.saveFailing = true;

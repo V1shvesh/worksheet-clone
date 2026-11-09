@@ -10,6 +10,7 @@ const LABELS: Record<SyncStatus, string> = {
   saved: "All changes saved",
   saving: "Saving…",
   offline: "Offline — changes are kept on this device",
+  paused: "Paused while you're away",
   reconnecting: "Reconnecting…",
   connecting: "Connecting…",
   saveFailing: "Not saved — retrying",
@@ -50,10 +51,13 @@ export function ConnectionStatus() {
       </p>
     );
   }
+  const waiting = `${pending} change${pending === 1 ? "" : "s"} waiting to sync`;
   const title =
     displayed === "offline" && pending > 0
-      ? `${pending} change${pending === 1 ? "" : "s"} waiting to sync`
-      : undefined;
+      ? waiting
+      : displayed === "paused"
+        ? `Reconnects when you come back${pending > 0 ? ` · ${waiting}` : ""}`
+        : undefined;
   return (
     <p
       role="status"

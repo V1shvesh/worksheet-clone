@@ -3,13 +3,14 @@ import { collabActions, collabSlice, syncStatus, type CollabState } from "./coll
 
 const base: Pick<
   CollabState,
-  "status" | "synced" | "hasSynced" | "unsyncedChanges" | "online" | "saveFailing"
+  "status" | "synced" | "hasSynced" | "unsyncedChanges" | "online" | "saveFailing" | "paused"
 > = {
   status: "connected",
   synced: true,
   hasSynced: true,
   unsyncedChanges: 0,
   online: true,
+  paused: false,
   saveFailing: false,
 };
 
@@ -69,5 +70,31 @@ describe("collab slice save-failing flag", () => {
     expect(state.saveFailing).toBe(true);
     state = collabSlice.reducer(state, collabActions.statusChanged("disconnected"));
     expect(state.saveFailing).toBe(false);
+  });
+});
+
+describe("collab slice paused (idle disconnect)", () => {
+  const base = {
+    status: "disconnected" as const,
+    synced: false,
+    hasSynced: true,
+    unsyncedChanges: 0,
+    online: true,
+    saveFailing: false,
+    paused: true,
+  };
+
+  it("shows paused instead of reconnecting, but offline still wins", () => {
+    expect(syncStatus(base)).toBe("paused");
+    expect(syncStatus({ ...base, online: false })).toBe("offline");
+    expect(syncStatus({ ...base, paused: false })).toBe("reconnecting");
+  });
+
+  it("is cleared by a connected socket and by opening another workbook", () => {
+    let state = collabSlice.reducer(undefined, collabActions.opened("w1"));
+    state = collabSlice.reducer(state, collabActions.pausedChanged(true));
+    expect(state.paused).toBe(true);
+    expect(collabSlice.reducer(state, collabActions.statusChanged("connected")).paused).toBe(false);
+    expect(collabSlice.reducer(state, collabActions.opened("w2")).paused).toBe(false);
   });
 });

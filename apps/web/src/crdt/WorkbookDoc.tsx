@@ -16,6 +16,7 @@ import {
   type WorkbookLookup,
 } from "./accessLoss";
 import { collabActions } from "./collabSlice";
+import { startIdleDisconnect } from "./idleDisconnect";
 import { clearWorkbookCache, openOfflineCache } from "./offlineCache";
 import { captureUndoContext, createWorkbookUndo, type WorkbookUndo } from "./undo";
 
@@ -172,6 +173,8 @@ export function WorkbookDocProvider({
       tracker.noteUpdate(origin, provider);
     ydoc.on("update", onDocUpdate);
     setOpen({ doc: ydoc, undo, awareness: provider.awareness });
+    // Hang up while the user is away so an idle tab doesn't keep the server awake.
+    const stopIdle = startIdleDisconnect({ provider, store });
 
     let disposed = false;
     const disposeConnection = async () => {
@@ -191,6 +194,7 @@ export function WorkbookDocProvider({
 
     return () => {
       ydoc.off("update", onDocUpdate);
+      stopIdle();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       unmounted = true;

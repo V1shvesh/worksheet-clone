@@ -126,12 +126,14 @@
 .workbook-header-connection[data-sync-status="reconnecting"]::before {
   background: currentcolor;
 }
-.workbook-header-connection[data-sync-status="offline"] {
+.workbook-header-connection[data-sync-status="offline"],
+.workbook-header-connection[data-sync-status="paused"] {
   border-color: var(--warning-border);
   background: var(--warning-soft);
   color: var(--warning-soft-text);
 }
-.workbook-header-connection[data-sync-status="offline"]::before {
+.workbook-header-connection[data-sync-status="offline"]::before,
+.workbook-header-connection[data-sync-status="paused"]::before {
   background: var(--warning-border);
 }
 .workbook-header-connection[data-sync-status="saveFailing"],
