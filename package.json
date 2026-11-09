@@ -25,6 +25,7 @@
     "docker:down": "docker compose -f docker/docker-compose.prod.yml down",
     "db:dump": "bash scripts/db-dump.sh",
     "db:restore": "bash scripts/db-restore.sh",
+    "screenshots": "pnpm --filter @worksheet-clone/web screenshots",
     "test:smoke": "pnpm --filter @worksheet-clone/web test:smoke",
     "prepare": "husky"
   },

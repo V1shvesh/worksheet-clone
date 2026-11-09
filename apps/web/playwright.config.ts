@@ -7,7 +7,7 @@ export default defineConfig({
   projects: [
     {
       name: "hermetic",
-      testIgnore: ["**/contract/**", "**/smoke/**"],
+      testIgnore: ["**/contract/**", "**/smoke/**", "**/screenshots/**"],
       use: { baseURL: "http://localhost:4173" },
     },
     {
