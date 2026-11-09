@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { confirmDeniedKind, deniedKindFromCloseReason, DirtyTracker } from "./accessLoss";
+import {
+  confirmDeniedKind,
+  deniedKindFromCloseReason,
+  DirtyTracker,
+  isTooLargeClose,
+} from "./accessLoss";
 
 describe("deniedKindFromCloseReason", () => {
   it.each([
@@ -10,6 +15,15 @@ describe("deniedKindFromCloseReason", () => {
     ["network lost", "unavailable"],
   ] as const)("%j -> %s", (reason, kind) => {
     expect(deniedKindFromCloseReason(reason)).toBe(kind);
+  });
+});
+
+describe("isTooLargeClose", () => {
+  it("is true only for the 4413 close", () => {
+    expect(isTooLargeClose({ code: 4413 })).toBe(true);
+    expect(isTooLargeClose({ code: 4205 })).toBe(false);
+    expect(isTooLargeClose({ code: 1006 })).toBe(false);
+    expect(isTooLargeClose(undefined)).toBe(false);
   });
 });
 

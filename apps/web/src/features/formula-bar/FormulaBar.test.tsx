@@ -10,6 +10,7 @@ import { WorkbookDocContext } from "../../crdt/WorkbookDoc";
 import { createFormulaEngine } from "../../engine";
 import { asRemote } from "../../test-utils/render-workbook";
 import { edit, newDoc } from "../../test-utils/workbook";
+import { MAX_CELL_CHARS } from "../grid/commands/cell-limits";
 import { FakeGridView } from "../grid/adapters/fake/fake-grid-view";
 import { GridContainer } from "../grid/GridContainer";
 
@@ -50,6 +51,17 @@ function setup(opts: { readOnly?: boolean } = {}) {
     },
   };
 }
+
+describe("input length limit", () => {
+  it("caps the formula bar and the cell editor at the cell limit", () => {
+    const s = setup();
+    s.click(0, 0);
+    expect(s.bar().maxLength).toBe(MAX_CELL_CHARS);
+    expect(MAX_CELL_CHARS).toBe(32_767);
+    act(() => s.view.keyDown({ key: "h" }));
+    expect((screen.getByTestId("cell-editor") as HTMLInputElement).maxLength).toBe(MAX_CELL_CHARS);
+  });
+});
 
 describe("name box", () => {
   it("shows the cell, a range, a whole column and a whole row", () => {

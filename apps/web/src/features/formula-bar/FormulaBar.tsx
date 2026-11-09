@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import type { RootState } from "../../app/store";
 import { useDocValue } from "../../crdt/useDocValue";
 import { useWorkbookDoc } from "../../crdt/WorkbookDoc";
+import { MAX_CELL_CHARS } from "../grid/commands/cell-limits";
 import type { Direction, GridInteraction } from "../grid/interaction";
 import { resolveSelection } from "../grid/interaction";
 import type { SheetViewModel } from "../grid/model";
@@ -81,6 +82,7 @@ export function FormulaBar({ model, controller, view, readOnly }: FormulaBarProp
         aria-label="Formula bar"
         spellCheck={false}
         autoComplete="off"
+        maxLength={MAX_CELL_CHARS}
         readOnly={disabled}
         value={value}
         onFocus={() => {

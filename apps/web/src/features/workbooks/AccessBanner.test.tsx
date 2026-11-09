@@ -80,6 +80,21 @@ describe("AccessBanner", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("too large: the size-limit message, the CSV download and Reload (no 'back' link)", async () => {
+    const download = vi.spyOn(recovery, "downloadFiles").mockImplementation(() => undefined);
+    const resetDoc = vi.fn(() => Promise.resolve());
+    render({ kind: "tooLarge", unsaved: true }, resetDoc);
+    expect(banner()).toHaveTextContent(
+      "This workbook reached its size limit (10 MB). Your last change wasn't saved.",
+    );
+    expect(banner()).not.toHaveTextContent("Some of your latest changes");
+    expect(screen.queryByRole("link")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Download unsaved changes" }));
+    expect(download).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(resetDoc).toHaveBeenCalledTimes(1));
+  });
+
   it("removed with unconfirmed edits offers the download", () => {
     render({ kind: "removed", unsaved: true });
     expect(screen.getByRole("button", { name: "Download unsaved changes" })).toBeInTheDocument();

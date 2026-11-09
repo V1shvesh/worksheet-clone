@@ -37,8 +37,8 @@ export function ConnectionStatus() {
   const pending = collab.access === "read-only" ? 0 : collab.unsyncedChanges;
   const displayed = useDisplayedStatus(syncStatus({ ...collab, unsyncedChanges: pending }));
 
-  if (collab.access === "denied") {
-    // Why is the access banner's job (it knows deleted from removed).
+  if (collab.access === "denied" || collab.accessLoss?.kind === "tooLarge") {
+    // Why is the access banner's job (it knows deleted from removed, and the size cap).
     return (
       <p
         role="status"

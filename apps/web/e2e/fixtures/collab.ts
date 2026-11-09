@@ -16,6 +16,7 @@ import {
   readSheetNames,
   setSheetName,
   COLLAB_CLOSE_CODES,
+  COLLAB_CLOSE_REASONS,
   type CollabNotice,
 } from "@worksheet-clone/shared";
 import { me } from "./workbooks";
@@ -117,6 +118,7 @@ export async function mockCollab(
   });
 
   const sockets: WebSocketRoute[] = [];
+  let connectionsOpened = 0;
   // While set, everything the server sends to the page queues up here instead of being
   // delivered (see `holdDelivery`). Order is preserved on release.
   let held: { route: WebSocketRoute; data: Buffer }[] | null = null;
@@ -137,6 +139,7 @@ export async function mockCollab(
       return;
     }
     sockets.push(route);
+    connectionsOpened += 1;
     const socket: WebSocketLike = {
       readyState: 1,
       send: (data) => {
@@ -299,6 +302,17 @@ export async function mockCollab(
      */
     kick(reason: "access-changed" | "workbook-deleted" = "access-changed"): void {
       closeSockets(COLLAB_CLOSE_CODES.accessChanged, reason);
+    },
+    /**
+     * Simulates the server refusing a change that would exceed the document size cap: it closes
+     * the socket with 4413 "too-large" (the provider must not reconnect and resend the change).
+     */
+    kickTooLarge(): void {
+      closeSockets(COLLAB_CLOSE_CODES.tooLarge, COLLAB_CLOSE_REASONS.tooLarge);
+    },
+    /** How many sockets the page has opened so far (refused ones excluded). */
+    connectionCount(): number {
+      return connectionsOpened;
     },
     /** What the next authentication grants. */
     setAccess(next: CollabAccess): void {

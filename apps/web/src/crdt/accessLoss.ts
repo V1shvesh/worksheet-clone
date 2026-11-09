@@ -1,7 +1,7 @@
-import { COLLAB_CLOSE_REASONS } from "@worksheet-clone/shared";
+import { COLLAB_CLOSE_CODES, COLLAB_CLOSE_REASONS } from "@worksheet-clone/shared";
 import type { AccessLoss } from "./collabSlice";
 
-export type DeniedKind = Exclude<AccessLoss["kind"], "downgraded">;
+export type DeniedKind = Exclude<AccessLoss["kind"], "downgraded" | "tooLarge">;
 
 /**
  * Who the server told us it was when it closed our socket (see COLLAB_CLOSE_REASONS). A refused
@@ -30,7 +30,16 @@ export const ACCESS_LOSS_MESSAGES: Record<AccessLoss["kind"], string> = {
   removed: "You no longer have access to this workbook",
   deleted: "This workbook was deleted",
   unavailable: "This workbook is no longer available to you",
+  tooLarge: "This workbook reached its size limit (10 MB). Your last change wasn't saved.",
 };
+
+/**
+ * The server closes the socket with 4413 when a change would push the document past its size cap
+ * and drops that change. Retrying would send the same change again, so the client stops instead.
+ */
+export function isTooLargeClose(event: { code?: number } | undefined): boolean {
+  return event?.code === COLLAB_CLOSE_CODES.tooLarge;
+}
 
 /**
  * Whether the replica holds changes the server has not confirmed.

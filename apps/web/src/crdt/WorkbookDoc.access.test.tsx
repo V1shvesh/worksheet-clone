@@ -19,13 +19,20 @@ interface FakeProviderConfig {
 const providers: {
   config: FakeProviderConfig;
   destroy: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
   instance: object;
 }[] = [];
 vi.mock("@hocuspocus/provider", () => ({
   HocuspocusProvider: class {
     destroy = vi.fn();
+    disconnect = vi.fn();
     constructor(config: FakeProviderConfig) {
-      providers.push({ config, destroy: this.destroy, instance: this });
+      providers.push({
+        config,
+        destroy: this.destroy,
+        disconnect: this.disconnect,
+        instance: this,
+      });
     }
   },
 }));
@@ -204,6 +211,52 @@ describe("access refused", () => {
     const { store, provider } = await mount();
     act(() => provider().config.onAuthenticationFailed({ reason: "forbidden" }));
     expect(store.getState().collab.accessLoss?.kind).toBe("unavailable");
+  });
+});
+
+describe("document too large (4413)", () => {
+  const closeTooLarge = (provider: () => (typeof providers)[number]) =>
+    act(() => {
+      provider().config.onClose({ event: { code: 4413, reason: "too-large" } });
+      provider().config.onStatus({ status: "disconnected" });
+    });
+
+  it("stops editing, flags the dropped change, stops reconnecting and wipes the on-device copy", async () => {
+    const { store, provider } = await mount();
+    act(() => provider().config.onAuthenticated({ scope: "read-write" }));
+    expect(await dbNames()).toContain("worksheet:u-7:wb-1");
+    typeLocally(provider().config.document);
+    act(() => provider().config.onUnsyncedChanges({ number: 1 }));
+
+    closeTooLarge(provider);
+
+    expect(store.getState().collab.accessLoss).toEqual({ kind: "tooLarge", unsaved: true });
+    expect(store.getState().collab.access).toBe("read-only");
+    // Reconnecting would resend the refused change forever.
+    expect(provider().disconnect).toHaveBeenCalledTimes(1);
+    await waitFor(async () => expect(await dbNames()).not.toContain("worksheet:u-7:wb-1"));
+  });
+
+  it("other close codes do not stop the provider", async () => {
+    const { store, provider } = await mount();
+    act(() => provider().config.onAuthenticated({ scope: "read-write" }));
+    closeWith(provider, "access-changed");
+    expect(provider().disconnect).not.toHaveBeenCalled();
+    expect(store.getState().collab.accessLoss).toBeNull();
+  });
+
+  it("Reload (resetDoc) mounts a fresh replica that can edit again", async () => {
+    const { store, provider, resetDoc } = await mount();
+    act(() => provider().config.onAuthenticated({ scope: "read-write" }));
+    typeLocally(provider().config.document);
+    closeTooLarge(provider);
+
+    await act(async () => void (await resetDoc()));
+
+    expect(providers).toHaveLength(2);
+    expect(store.getState().collab.accessLoss).toBeNull();
+    act(() => provider().config.onAuthenticated({ scope: "read-write" }));
+    expect(store.getState().collab.access).toBe("read-write");
   });
 });
 

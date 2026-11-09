@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../../app/store";
+import { MAX_CELL_CHARS } from "../commands/cell-limits";
 import type { GridInteraction, IdMapper } from "../interaction";
 import { resolveSelection, type Direction, type IdSelection } from "../interaction";
 import type { SheetViewModel } from "../model";
@@ -312,6 +313,7 @@ function CellEditor({ draft, rect, controller, view, takeFocus }: CellEditorProp
       aria-label="Cell editor"
       spellCheck={false}
       autoComplete="off"
+      maxLength={MAX_CELL_CHARS}
       value={draft}
       onChange={(e) => controller.updateDraft(e.target.value)}
       onKeyDown={onKeyDown}

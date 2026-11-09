@@ -11,6 +11,7 @@ import {
 import { createWorkbookUndo } from "../../../crdt/undo";
 import { LOCAL_ORIGIN } from "../../../crdt/origin";
 import { edit } from "../../../test-utils/workbook";
+import { CELL_TOO_LONG_MESSAGE, MAX_CELL_CHARS } from "../commands/cell-limits";
 import { MAX_PASTE_CELLS, type ClipboardDataLike } from "./clipboard";
 import { parseClipboardHtml } from "./clipboard-html";
 import { resolveSelection } from "./selection";
@@ -192,6 +193,27 @@ describe("paste", () => {
     ).toEqual({ b: true });
     expect(t.txs).toEqual([LOCAL_ORIGIN]);
     expect(t.range()).toEqual({ start: t.c(3, 0), end: t.c(5, 1) });
+  });
+
+  it("cuts over-long pasted cells to the cell limit and says so in a toast", () => {
+    const t = setup();
+    t.select([0, 0]);
+    const long = "x".repeat(MAX_CELL_CHARS + 10);
+    expect(t.interaction.paste(fakeData({ "text/plain": `${long}\tshort` }))).toBe(true);
+    expect(t.raw(0, 0)).toHaveLength(MAX_CELL_CHARS);
+    expect(t.raw(0, 1)).toBe("short");
+    expect(t.toasts()).toEqual([CELL_TOO_LONG_MESSAGE]);
+    expect(CELL_TOO_LONG_MESSAGE).toBe(
+      "Some cells were longer than 32,767 characters and were cut",
+    );
+  });
+
+  it("does not toast when every pasted cell fits", () => {
+    const t = setup();
+    t.select([0, 0]);
+    t.interaction.paste(fakeData({ "text/plain": "x".repeat(MAX_CELL_CHARS) }));
+    expect(t.raw(0, 0)).toHaveLength(MAX_CELL_CHARS);
+    expect(t.toasts()).toEqual([]);
   });
 
   it("prefers our html payload over the plain text; foreign html falls back to the text", () => {

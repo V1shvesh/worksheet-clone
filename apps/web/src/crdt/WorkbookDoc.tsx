@@ -12,6 +12,7 @@ import {
   confirmDeniedKind,
   deniedKindFromCloseReason,
   DirtyTracker,
+  isTooLargeClose,
   type WorkbookLookup,
 } from "./accessLoss";
 import { collabActions } from "./collabSlice";
@@ -124,6 +125,15 @@ export function WorkbookDocProvider({
       },
       onClose: ({ event }) => {
         lastCloseReason = event?.reason;
+        if (isTooLargeClose(event)) {
+          // The server dropped the change that broke the cap; reconnecting would resend it. Stop
+          // editing, keep the replica for the recovery export, and forget the on-device copy so
+          // the change is not revived by a reload.
+          dispatch(collabActions.accessLost({ kind: "tooLarge", unsaved: true }));
+          dispatch(collabActions.accessChanged("read-only"));
+          void wipeCache();
+          provider.disconnect();
+        }
       },
       onAuthenticated: ({ scope }) => {
         const next = scope === "read-write" ? "read-write" : "read-only";

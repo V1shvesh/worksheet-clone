@@ -162,6 +162,54 @@ test("kicked to viewer with unconfirmed edits: banner, CSV download, reload show
   await expect(banner(page)).toHaveCount(0);
 });
 
+test("document too large (4413): banner, no reconnect, CSV download, reload resumes editing", async ({
+  page,
+}) => {
+  const { grid, collab, serverCell, remote } = await setup(page);
+  await remote((set) => set(0, 1, { v: "server B1" }), BOB);
+  await expect(grid.cell(0, 1)).toHaveText("server B1");
+
+  // The change that breaks the cap never reaches the server: the uplink stalls, then it closes.
+  collab.holdUplink();
+  await grid.typeInto(0, 0, "too big");
+  await expect(connection(page)).toHaveText("Saving…");
+  collab.kickTooLarge();
+  const opened = collab.connectionCount();
+  await collab.releaseUplink(); // the closed socket discarded what was held; new sockets must flow
+
+  await expect(banner(page)).toHaveText(
+    /This workbook reached its size limit \(10 MB\)\. Your last change wasn't saved\./,
+    { timeout: 20_000 },
+  );
+  await expect(banner(page)).toHaveAttribute("role", "alert");
+  await expect(connection(page)).toHaveText("Not connected");
+  expect(serverCell(0, 0)).toBeUndefined();
+
+  // Editing has stopped, and the provider does not reconnect and resend the change.
+  await grid.clickCell(0, 2);
+  await page.keyboard.type("nope");
+  await page.keyboard.press("Enter");
+  await expect(grid.cell(0, 2)).toHaveText("");
+  await page.waitForTimeout(2500); // longer than the provider's reconnect delay
+  expect(collab.connectionCount()).toBe(opened);
+  await expect(connection(page)).toHaveText("Not connected");
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download unsaved changes" }).click();
+  const file = await download;
+  expect(await readFile(await file.path(), "utf8")).toBe(
+    `${String.fromCharCode(0xfeff)}too big,server B1\r\n`,
+  );
+
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(banner(page)).toHaveCount(0);
+  await expect(grid.cell(0, 0)).toHaveText("");
+  await expect(grid.cell(0, 1)).toHaveText("server B1");
+  await expect(connection(page)).toHaveText("All changes saved");
+  await grid.typeInto(0, 2, "again");
+  await expect.poll(() => serverCell(0, 2)).toEqual({ v: "again" });
+});
+
 test("kicked to viewer without unconfirmed edits: just the notice", async ({ page }) => {
   const { grid, collab, remote } = await setup(page);
   await remote((set) => set(0, 1, { v: "server B1" }), BOB);

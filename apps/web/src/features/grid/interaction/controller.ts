@@ -5,6 +5,7 @@ import { setColWidth, setRowHeight } from "../../../crdt/mutations";
 import { LOCAL_ORIGIN } from "../../../crdt/origin";
 import { toastsActions } from "../../toasts/toastsSlice";
 import { fillRange } from "../commands/fill-range";
+import { CELL_TOO_LONG_MESSAGE, limitPasteEntries } from "../commands/cell-limits";
 import { moveCells, pasteEntries } from "../commands/paste";
 import { setCellInput } from "../commands/set-cell-input";
 import { clipboardActions } from "../clipboardSlice";
@@ -403,9 +404,11 @@ export function createGridInteraction(deps: GridInteractionDeps): GridInteractio
       tooLarge();
       return true;
     }
-    if (pasteEntries(target, sheetId, plan.entries)) {
+    const limited = limitPasteEntries(plan.entries);
+    if (pasteEntries(target, sheetId, limited.entries)) {
       selectRange(plan.range);
       if (plan.clipped) toast(CLIPPED);
+      if (limited.truncated) toast(CELL_TOO_LONG_MESSAGE);
     }
     return true;
   };

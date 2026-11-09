@@ -28,7 +28,7 @@ export interface CollabState {
  * `unsaved`: local changes the server had not confirmed when access dropped.
  */
 export interface AccessLoss {
-  kind: "downgraded" | "removed" | "deleted" | "unavailable";
+  kind: "downgraded" | "removed" | "deleted" | "unavailable" | "tooLarge";
   unsaved: boolean;
 }
 
