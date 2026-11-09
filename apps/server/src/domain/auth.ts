@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import type { AuthUser } from "@worksheet-clone/shared";
 import { db } from "../db/client.js";
 import { sessions, users } from "../db/schema.js";
@@ -80,4 +80,13 @@ export async function getSessionUser(sessionId: string): Promise<AuthUser | null
   }
 
   return { id: row.userId, email: row.email };
+}
+
+/** Removes sessions past their expiry (they are otherwise only removed when presented). Returns how many. */
+export async function deleteExpiredSessions(now: Date = new Date()): Promise<number> {
+  const deleted = await db
+    .delete(sessions)
+    .where(lt(sessions.expiresAt, now))
+    .returning({ id: sessions.id });
+  return deleted.length;
 }

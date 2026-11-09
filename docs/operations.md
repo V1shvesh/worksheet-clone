@@ -75,3 +75,7 @@ Defaults live in `src/http/rate-limits.ts` (`DEFAULT_RATE_LIMITS`); `buildApp({ 
 Every refusal is `429` with `{ error: { code: "RATE_LIMITED", message } }` and a `Retry-After` header (WebSocket upgrades get a bare `HTTP/1.1 429` with `Retry-After`). Signup and login have their own counters and are not counted against the 300/minute one.
 
 The IP comes from the socket unless `TRUST_PROXY` is set. Behind Railway set `TRUST_PROXY=1` (one proxy in front: the client is the last `X-Forwarded-For` entry) and check in the logs that `req.remoteAddress` shows real client addresses; a larger number means more proxies, `true` believes the leftmost (forgeable) entry. Without it every request would share the proxy's address and a single user could exhaust everybody's budget; with it set wrongly (too many hops) the limits can be bypassed by spoofing the header.
+
+## Session cleanup
+
+Expired sessions are deleted once at start-up and then hourly (`src/session-cleanup.ts`). The timer is unref'd and cleared on close, so it never keeps the process alive; a sleeping Railway container does not run it, and a run while awake is one cheap `delete ... where expires_at < now()` that lets Neon go back to sleep after its usual 5 idle minutes.
