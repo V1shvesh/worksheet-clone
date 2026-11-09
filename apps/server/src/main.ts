@@ -2,9 +2,20 @@
 // before anything else (the database pool, the session plugin) reads it.
 import { config } from "./config.js";
 import { buildApp } from "./app.js";
+import { pool } from "./db/client.js";
 import { runMigrations } from "./db/migrate.js";
+import { installShutdownHandlers } from "./shutdown.js";
 
 const app = buildApp();
+
+installShutdownHandlers({
+  close: () => app.close(),
+  closeDatabase: () => pool.end(),
+  log: {
+    info: (message) => app.log.info(message),
+    error: (fields, message) => app.log.error(fields, message),
+  },
+});
 
 try {
   // Before listening: no request or WebSocket can reach a half-migrated schema.

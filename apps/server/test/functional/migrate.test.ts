@@ -1,42 +1,25 @@
 import { readFileSync } from "node:fs";
 import { Client } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { config } from "../../src/config.js";
+import { afterAll, describe, expect, it } from "vitest";
 import { MIGRATIONS_FOLDER, runMigrations } from "../../src/db/migrate.js";
+import { createScratchDatabase, urlForDatabase } from "../helpers/scratch-db.js";
 
 const journal = JSON.parse(readFileSync(`${MIGRATIONS_FOLDER}/meta/_journal.json`, "utf8")) as {
   entries: { tag: string }[];
 };
 const allTags = journal.entries.map((entry) => entry.tag);
 
-// Migrations run against a throwaway database so they start from empty, whatever
-// state the shared test database is in.
-function urlFor(database: string): string {
-  const url = new URL(config.databaseUrl);
-  url.pathname = `/${database}`;
-  return url.toString();
-}
-
 describe("runMigrations", () => {
-  const admin = new Client({ connectionString: config.databaseUrl });
-  const created: string[] = [];
+  const scratch: Awaited<ReturnType<typeof createScratchDatabase>>[] = [];
 
   async function freshDatabase(): Promise<string> {
-    const name = `migrate_test_${crypto.randomUUID().replaceAll("-", "")}`;
-    await admin.query(`create database ${name}`);
-    created.push(name);
-    return urlFor(name);
+    const database = await createScratchDatabase();
+    scratch.push(database);
+    return database.url;
   }
 
-  beforeAll(async () => {
-    await admin.connect();
-  });
-
   afterAll(async () => {
-    for (const name of created) {
-      await admin.query(`drop database if exists ${name} with (force)`);
-    }
-    await admin.end();
+    await Promise.all(scratch.map((database) => database.drop()));
   });
 
   it("applies every migration on an empty database, then does nothing", async () => {
@@ -65,6 +48,8 @@ describe("runMigrations", () => {
   });
 
   it("rejects when the database does not exist", async () => {
-    await expect(runMigrations({ url: urlFor("does_not_exist_" + Date.now()) })).rejects.toThrow();
+    await expect(
+      runMigrations({ url: urlForDatabase(`does_not_exist_${Date.now()}`) }),
+    ).rejects.toThrow();
   });
 });

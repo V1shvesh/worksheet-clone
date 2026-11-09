@@ -27,3 +27,7 @@ The compiled output carries its own copy of the migrations folder (`pnpm build` 
 - Add tables, columns (nullable or with a default) and indexes in one release; stop using something in a later release; only then drop it in a third.
 - Never rename or drop a column/table, or add a `NOT NULL` column without a default, in the same release that stops using it.
 - Never rewrite large tables in a migration (it runs while the app is down to new traffic).
+
+## Shutdown
+
+On `SIGTERM`/`SIGINT` (Railway sends SIGTERM on every deploy and when the service sleeps) the server stops accepting connections, closes the WebSockets, waits (bounded to 5 s) for open workbooks to be stored, closes the database pool and exits 0. A second signal, or a drain that takes longer than 20 s, exits 1 immediately. Any workbook the database kept refusing is logged at error level ("shutting down with UNSAVED changes").
