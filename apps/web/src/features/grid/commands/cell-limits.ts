@@ -1,8 +1,8 @@
+import { LIMITS } from "@worksheet-clone/shared";
 import type { PasteEntry } from "../interaction/clipboard";
 
-// TODO(M9): use LIMITS.cellChars from shared once merged
 /** The longest raw input one cell may hold (Excel's and Sheets' limit). */
-export const MAX_CELL_CHARS = 32_767;
+export const MAX_CELL_CHARS = LIMITS.cellChars;
 
 export const CELL_TOO_LONG_MESSAGE = `Some cells were longer than ${MAX_CELL_CHARS.toLocaleString("en-US")} characters and were cut`;
 
