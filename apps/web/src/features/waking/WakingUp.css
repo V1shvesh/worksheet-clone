@@ -2,12 +2,16 @@
   position: fixed;
   top: 0;
   left: 50%;
-  transform: translateX(-50%);
-  margin: 0;
-  padding: 0.4rem 1rem;
-  background: #fff8e1;
-  border: 1px solid #f0d98a;
-  border-top: 0;
-  border-radius: 0 0 6px 6px;
   z-index: 1000;
+  max-width: calc(100vw - 2 * var(--space-4));
+  margin: 0;
+  padding: var(--space-1) var(--space-4);
+  transform: translateX(-50%);
+  border: 1px solid var(--warning-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--warning-soft-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-sm);
 }

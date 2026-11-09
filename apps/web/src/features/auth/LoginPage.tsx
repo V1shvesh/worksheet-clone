@@ -22,35 +22,37 @@ export function LoginPage() {
   }
 
   return (
-    <main>
-      <h1>Log in</h1>
-      <form onSubmit={(event) => void handleSubmit(event)}>
-        <label>
-          Email
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </label>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={isLoading}>
-          Log in
-        </button>
-      </form>
-      <p>
-        Need an account? <Link to="/signup">Sign up</Link>
-      </p>
+    <main className="auth-page">
+      <div className="auth-card">
+        <h1>Log in</h1>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <label>
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <button type="submit" disabled={isLoading}>
+            Log in
+          </button>
+        </form>
+        <p className="auth-alt">
+          Need an account? <Link to="/signup">Sign up</Link>
+        </p>
+      </div>
     </main>
   );
 }

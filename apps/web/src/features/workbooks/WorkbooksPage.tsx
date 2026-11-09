@@ -22,8 +22,8 @@ export function WorkbooksPage() {
   const shared = workbooks?.filter((workbook) => workbook.role !== "owner") ?? [];
 
   return (
-    <main>
-      <header>
+    <main className="page">
+      <header className="page-header">
         <h1>Worksheet Clone</h1>
         {me && <p>Signed in as {me.user.email}</p>}
         <button type="button" onClick={() => void logout()}>
@@ -80,7 +80,7 @@ function CreateWorkbookForm() {
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)}>
+    <form className="inline-form" onSubmit={(event) => void handleSubmit(event)}>
       <label>
         New workbook name
         <input
@@ -117,13 +117,15 @@ function WorkbookSection({
     <section aria-label={title}>
       <h2>{title}</h2>
       {workbooks.length === 0 ? (
-        <p>{emptyText}</p>
+        <p className="empty-text">{emptyText}</p>
       ) : (
-        <ul>
+        <ul className="workbook-list">
           {workbooks.map((workbook) => (
             <li key={workbook.id}>
-              <Link to={`/workbooks/${workbook.id}`}>{workbook.name}</Link>
-              {workbook.role !== "owner" && <span> ({workbook.role})</span>}
+              <Link className="workbook-list-name" to={`/workbooks/${workbook.id}`}>
+                {workbook.name}
+              </Link>
+              {workbook.role !== "owner" && <span className="role-badge"> ({workbook.role})</span>}
               <button
                 type="button"
                 aria-label={`Members of ${workbook.name}`}
@@ -134,6 +136,7 @@ function WorkbookSection({
               {onDelete && workbook.role === "owner" && (
                 <button
                   type="button"
+                  className="button-danger"
                   aria-label={`Delete ${workbook.name}`}
                   onClick={() => onDelete(workbook)}
                 >

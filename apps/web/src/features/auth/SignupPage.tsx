@@ -22,36 +22,38 @@ export function SignupPage() {
   }
 
   return (
-    <main>
-      <h1>Sign up</h1>
-      <form onSubmit={(event) => void handleSubmit(event)}>
-        <label>
-          Email
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </label>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={isLoading}>
-          Sign up
-        </button>
-      </form>
-      <p>
-        Already have an account? <Link to="/login">Log in</Link>
-      </p>
+    <main className="auth-page">
+      <div className="auth-card">
+        <h1>Sign up</h1>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <label>
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <button type="submit" disabled={isLoading}>
+            Sign up
+          </button>
+        </form>
+        <p className="auth-alt">
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
+      </div>
     </main>
   );
 }

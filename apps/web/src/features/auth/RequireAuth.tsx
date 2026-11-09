@@ -5,7 +5,7 @@ export function RequireAuth() {
   const { data, isLoading, isError } = useMeQuery();
 
   if (isLoading) {
-    return <p>Loading…</p>;
+    return <p className="page">Loading…</p>;
   }
 
   if (isError || !data) {

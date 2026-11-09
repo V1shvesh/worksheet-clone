@@ -31,12 +31,14 @@ export function ConfirmDialog({
     <Dialog title={title} onClose={onCancel}>
       <p>{message}</p>
       {error && <p role="alert">{error}</p>}
-      <button type="button" ref={cancelRef} onClick={onCancel}>
-        Cancel
-      </button>
-      <button type="button" onClick={onConfirm} disabled={busy}>
-        {confirmLabel}
-      </button>
+      <div className="dialog-actions">
+        <button type="button" ref={cancelRef} onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="button-danger" onClick={onConfirm} disabled={busy}>
+          {confirmLabel}
+        </button>
+      </div>
     </Dialog>
   );
 }

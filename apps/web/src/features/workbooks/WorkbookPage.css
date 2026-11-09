@@ -1,48 +1,162 @@
-/* The grid needs a definite height, so the workbook page is a full-viewport column. */
-body:has(.workbook-page) {
-  margin: 0;
-}
+/* The grid needs a definite height, so the workbook page is a full-viewport column:
+   header / toolbar / banners / grid (fills the rest) / sheet tabs. */
 .workbook-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  box-sizing: border-box;
-  padding: 8px 16px;
+  height: 100dvh;
+  padding: 0;
   overflow: hidden;
+  background: var(--surface);
 }
+.workbook-page > p {
+  margin: var(--space-4);
+}
+/* The grid library paints its own light theme; keep it light in dark mode rather than half-themed. */
 .workbook-page-grid {
   flex: 1;
   min-height: 240px;
-  border: 1px solid #d0d7de;
+  margin: 0 var(--space-3);
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: #1f2328;
+  color-scheme: light;
 }
 .workbook-page-grid-loading {
-  padding: 8px;
-  color: #666;
+  margin: 0;
+  padding: var(--space-2);
+  color: #59636e;
 }
+.workbook-page-grid-error {
+  padding: var(--space-3);
+  color: #cf222e;
+}
+
 .workbook-header {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 16px;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.workbook-header-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-size);
+  font-size: var(--text-sm);
+  white-space: nowrap;
 }
 .workbook-header h1,
 .workbook-header-name {
-  margin: 4px 0;
-  font-size: 1.25rem;
+  display: flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.workbook-header-name button {
+  min-height: var(--target-size);
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+.workbook-header-name button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.workbook-header-name input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-md);
 }
 .workbook-header p {
   margin: 0;
 }
+.workbook-header-role {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+/* Sync status as a colored pill; the text carries the meaning, color is a second channel. */
+.workbook-header-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.workbook-header-connection::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.workbook-header-connection[data-sync-status="saved"] {
+  border-color: transparent;
+  background: var(--success-soft);
+  color: var(--success-soft-text);
+}
+.workbook-header-connection[data-sync-status="saved"]::before {
+  background: currentcolor;
+}
+.workbook-header-connection[data-sync-status="saving"],
+.workbook-header-connection[data-sync-status="connecting"],
+.workbook-header-connection[data-sync-status="reconnecting"] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-soft-text);
+}
+.workbook-header-connection[data-sync-status="saving"]::before,
+.workbook-header-connection[data-sync-status="connecting"]::before,
+.workbook-header-connection[data-sync-status="reconnecting"]::before {
+  background: currentcolor;
+}
+.workbook-header-connection[data-sync-status="offline"] {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+  color: var(--warning-soft-text);
+}
+.workbook-header-connection[data-sync-status="offline"]::before {
+  background: var(--warning-border);
+}
+.workbook-header-connection[data-sync-status="saveFailing"],
+.workbook-header-connection[data-sync-status="denied"] {
+  border-color: transparent;
+  background: var(--danger-soft);
+  color: var(--danger-soft-text);
+}
+.workbook-header-connection[data-sync-status="saveFailing"]::before,
+.workbook-header-connection[data-sync-status="denied"]::before {
+  background: var(--danger);
+}
+
 .access-banner {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 16px;
-  margin: 4px 0;
-  padding: 8px 12px;
-  border: 1px solid #d4a72c;
-  border-radius: 4px;
-  background: #fff8c5;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--warning-soft-text);
 }
 .access-banner p {
   margin: 0;
@@ -52,6 +166,10 @@ body:has(.workbook-page) {
 }
 .access-banner-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   align-items: center;
+}
+.access-banner a {
+  color: inherit;
 }

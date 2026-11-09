@@ -1,0 +1,97 @@
+/* Design tokens. Dark mode redefines the same names, so components never branch on the scheme. */
+:root {
+  color-scheme: light dark;
+
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --target-size: 32px;
+  --transition: 120ms ease;
+
+  /* Light scheme. Text/background pairs below are checked for >= 4.5:1. */
+  --surface: #ffffff;
+  --surface-raised: #f6f8fa;
+  --surface-hover: #eaeef2;
+  --surface-sunken: #f0f2f5;
+  --text: #1f2328;
+  --text-muted: #59636e;
+  --border: #d1d9e0;
+  --border-strong: #8c959f;
+  --accent: #0860ca;
+  --accent-hover: #064fa6;
+  --accent-text: #ffffff;
+  --accent-soft: #dbeafe;
+  --accent-soft-text: #0b3d91;
+  --danger: #cf222e;
+  --danger-hover: #a40e26;
+  --danger-text: #ffffff;
+  --danger-soft: #ffebe9;
+  --danger-soft-text: #82071e;
+  --warning-soft: #fff8c5;
+  --warning-soft-text: #4d2d00;
+  --warning-border: #bf8700;
+  --success-soft: #dafbe1;
+  --success-soft-text: #0a4a1f;
+  --toast-bg: #1f2328;
+  --toast-text: #ffffff;
+  --focus-ring: #0969da;
+  --backdrop: rgb(31 35 40 / 45%);
+
+  --shadow-sm: 0 1px 2px rgb(31 35 40 / 12%);
+  --shadow-md: 0 4px 14px rgb(31 35 40 / 18%);
+  --shadow-lg: 0 12px 32px rgb(31 35 40 / 28%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0d1117;
+    --surface-raised: #161b22;
+    --surface-hover: #262c36;
+    --surface-sunken: #010409;
+    --text: #e6edf3;
+    --text-muted: #9ba5b1;
+    --border: #3d444d;
+    --border-strong: #6e7681;
+    --accent: #4493f8;
+    --accent-hover: #6cacff;
+    --accent-text: #0d1117;
+    --accent-soft: #14315c;
+    --accent-soft-text: #cfe3ff;
+    --danger: #ff7b72;
+    --danger-hover: #ffa198;
+    --danger-text: #0d1117;
+    --danger-soft: #4a1218;
+    --danger-soft-text: #ffd5d1;
+    --warning-soft: #3a2a00;
+    --warning-soft-text: #ffe9a8;
+    --warning-border: #9e6a03;
+    --success-soft: #0f3a1d;
+    --success-soft-text: #b6f0c4;
+    --toast-bg: #e6edf3;
+    --toast-text: #0d1117;
+    --focus-ring: #6cacff;
+    --backdrop: rgb(1 4 9 / 70%);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 50%);
+    --shadow-md: 0 4px 14px rgb(0 0 0 / 55%);
+    --shadow-lg: 0 12px 32px rgb(0 0 0 / 65%);
+  }
+}

@@ -50,9 +50,11 @@ export function MembersDialog({ workbook, onClose }: MembersDialogProps) {
 
       {canManage && <AddMemberForm workbookId={workbook.id} run={run} />}
 
-      <button type="button" onClick={onClose}>
-        Close
-      </button>
+      <div className="dialog-actions">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
     </Dialog>
   );
 }
@@ -127,7 +129,7 @@ function AddMemberForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Add a person">
+    <form className="inline-form" onSubmit={handleSubmit} aria-label="Add a person">
       <label>
         Email
         <input

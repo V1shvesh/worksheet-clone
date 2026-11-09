@@ -2,24 +2,31 @@
   flex: none;
   display: flex;
   align-items: stretch;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid #d0d7de;
-  font-size: 13px;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  color-scheme: light dark;
+  font-size: var(--text-sm);
 }
 .formula-bar-name {
   flex: none;
+  display: flex;
+  align-items: center;
   width: 90px;
-  padding: 4px 6px;
-  border: 1px solid #d0d7de;
-  background: #f6f8fa;
-  font-family: monospace;
+  min-height: var(--target-size);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
 }
 .formula-bar-input {
   flex: 1;
   min-width: 0;
-  padding: 4px 6px;
-  border: 1px solid #d0d7de;
-  font: inherit;
-  font-family: monospace;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
 }

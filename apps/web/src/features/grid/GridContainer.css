@@ -44,6 +44,7 @@
   padding: 0 6px;
   border: 2px solid #1a73e8;
   background: #fff;
+  color: #1f2328; /* the grid stays light in dark mode, so the editor must too */
   font: inherit;
   outline: none;
   pointer-events: auto;
@@ -83,14 +84,17 @@
   flex-direction: column;
   min-width: 200px;
   padding: 4px 0;
-  background: #fff;
-  border: 1px solid #c4c7c5;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
 }
 .grid-context-menu-item {
-  padding: 6px 16px;
+  min-height: var(--target-size);
+  padding: 0 16px;
   border: 0;
+  border-radius: 0;
   background: none;
   font: inherit;
   text-align: left;
@@ -98,11 +102,11 @@
 }
 .grid-context-menu-item:hover:not(:disabled),
 .grid-context-menu-item:focus-visible {
-  background: #e8f0fe;
+  background: var(--accent-soft);
   outline: none;
 }
 .grid-context-menu-item:disabled {
-  color: #9aa0a6;
+  color: var(--text-muted);
   cursor: default;
 }
 .grid-remote-selection {

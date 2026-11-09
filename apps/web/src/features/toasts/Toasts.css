@@ -1,35 +1,43 @@
 .toasts {
   position: fixed;
-  right: 16px;
-  bottom: 48px;
+  right: var(--space-4);
+  bottom: 56px;
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-width: 360px;
+  gap: var(--space-2);
+  max-width: min(360px, calc(100vw - 2 * var(--space-4)));
   pointer-events: none;
 }
 .toast {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #1f2328;
-  color: #fff;
-  border-radius: 6px;
-  font-size: 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-md);
   pointer-events: auto;
 }
 .toast-message {
   flex: 1;
+  padding-top: 4px;
 }
 .toast-dismiss {
-  background: none;
+  min-width: var(--target-size);
+  padding: 0;
   border: 0;
+  background: none;
   color: inherit;
-  cursor: pointer;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
-  padding: 0 2px;
+}
+.toast .toast-dismiss:hover:not(:disabled) {
+  background: transparent;
+  opacity: 0.7;
+}
+.toast .toast-dismiss:focus-visible {
+  outline-color: var(--toast-text);
 }

@@ -328,15 +328,13 @@ function DeleteSheetDialog({
 }) {
   const name = useSheetName(sheetId) ?? "this sheet";
   return (
-    <div className="sheet-tabs-dialog">
-      <ConfirmDialog
-        title="Delete sheet"
-        message={`Delete "${name}" and everything in it? Formulas that reference it will show #REF!.`}
-        confirmLabel="Delete sheet"
-        onConfirm={onConfirm}
-        onCancel={onCancel}
-      />
-    </div>
+    <ConfirmDialog
+      title="Delete sheet"
+      message={`Delete "${name}" and everything in it? Formulas that reference it will show #REF!.`}
+      confirmLabel="Delete sheet"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
 
